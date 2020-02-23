@@ -20,8 +20,8 @@ from __future__ import print_function
 
 import tensorflow as tf
 
-
-@tf.keras.utils.register_keras_serializable(package='Text')
+# TODO: Uncomment this
+# @tf.keras.utils.register_keras_serializable(package='Text')
 def simple_swish(features):
   """Computes the Swish activation function.
 
@@ -41,8 +41,8 @@ def simple_swish(features):
   features = tf.convert_to_tensor(features)
   return features * tf.nn.sigmoid(features)
 
-
-@tf.keras.utils.register_keras_serializable(package='Text')
+# TODO: Uncomment this
+# @tf.keras.utils.register_keras_serializable(package='Text')
 def hard_swish(features):
   """Computes a hard version of the swish function.
 
@@ -58,8 +58,8 @@ def hard_swish(features):
   features = tf.convert_to_tensor(features)
   return features * tf.nn.relu6(features + tf.constant(3.)) * (1. / 6.)
 
-
-@tf.keras.utils.register_keras_serializable(package='Text')
+# TODO: Uncomment this
+# @tf.keras.utils.register_keras_serializable(package='Text')
 def identity(features):
   """Computes the identity function.
 
