@@ -43,7 +43,7 @@ def create_model(params, is_train):
     if is_train:
       inputs = tf.keras.layers.Input((None, params["feature_dim"]), dtype="float32", name="inputs")
       targets = tf.keras.layers.Input((None, params["feature_dim"]), dtype="float32", name="targets")
-      internal_model = FashionTransformer(params, name="transformer_v2")
+      internal_model = FashionEncoder(params, name="transformer_v2")
       logits = internal_model([inputs, targets], training=True)
       vocab_size = params["vocab_size"]
       label_smoothing = params["label_smoothing"]
@@ -60,14 +60,14 @@ def create_model(params, is_train):
 
     else:
       inputs = tf.keras.layers.Input((None, params["feature_dim"]), dtype="float32", name="inputs")
-      internal_model = FashionTransformer(params, name="transformer_v2")
+      internal_model = FashionEncoder(params, name="transformer_v2")
       ret = internal_model([inputs], training=False)
       internal_model.summary()
       # outputs, scores = ret["outputs"], ret["scores"]
       return tf.keras.Model(inputs, [ret])
 
 
-class FashionTransformer(tf.keras.Model):
+class FashionEncoder(tf.keras.Model):
   """Transformer model with Keras.
 
   Implemented as described in: https://arxiv.org/pdf/1706.03762.pdf
@@ -86,7 +86,7 @@ class FashionTransformer(tf.keras.Model):
       params: hyperparameter object defining layer sizes, dropout values, etc.
       name: name of the model.
     """
-    super(FashionTransformer, self).__init__(name=name)
+    super(FashionEncoder, self).__init__(name=name)
     self.params = params
 
     # TODO: Change embedding layer
@@ -95,8 +95,6 @@ class FashionTransformer(tf.keras.Model):
     # TODO: Skip embedding
 
     self.encoder_stack = EncoderStack(params)
-
-    self.decoder_stack = DecoderStack(params)
 
   def get_config(self):
     return {
@@ -151,7 +149,7 @@ class FashionTransformer(tf.keras.Model):
       # Generate output sequence if targets is None, or return logits if target
       # sequence is known.
       if targets is None:
-        return self.predict_2(encoder_outputs, attention_bias, training)
+        return encoder_outputs
       else:
         logits = self.decode(targets, encoder_outputs, attention_bias, training)
         return logits
@@ -194,54 +192,6 @@ class FashionTransformer(tf.keras.Model):
 
       return self.encoder_stack(
           encoder_inputs, attention_bias, inputs_padding, training=training)
-
-  def decode(self, targets, encoder_outputs, attention_bias, training):
-    """Generate logits for each value in the target sequence.
-
-    Args:
-      targets: target values for the output sequence. int tensor with shape
-        [batch_size, target_length]
-      encoder_outputs: continuous representation of input sequence. float tensor
-        with shape [batch_size, input_length, hidden_size]
-      attention_bias: float tensor with shape [batch_size, 1, 1, input_length]
-      training: boolean, whether in training mode or not.
-
-    Returns:
-      float32 tensor with shape [batch_size, target_length, vocab_size]
-    """
-    with tf.name_scope("decode"):
-      # Prepare inputs to decoder layers by shifting targets, adding positional
-      # encoding and applying dropout.
-      decoder_inputs = self.embedding_softmax_layer(targets)
-      decoder_inputs = tf.cast(decoder_inputs, self.params["dtype"])
-      attention_bias = tf.cast(attention_bias, self.params["dtype"])
-      with tf.name_scope("shift_targets"):
-        # Shift targets to the right, and remove the last element
-        decoder_inputs = tf.pad(decoder_inputs,
-                                [[0, 0], [1, 0], [0, 0]])[:, :-1, :]
-      with tf.name_scope("add_pos_encoding"):
-        length = tf.shape(decoder_inputs)[1]
-        pos_encoding = model_utils.get_position_encoding(
-            length, self.params["hidden_size"])
-        pos_encoding = tf.cast(pos_encoding, self.params["dtype"])
-        decoder_inputs += pos_encoding
-      if training:
-        decoder_inputs = tf.nn.dropout(
-            decoder_inputs, rate=self.params["layer_postprocess_dropout"])
-
-      # Run values
-      decoder_self_attention_bias = model_utils.get_decoder_self_attention_bias(
-          length, dtype=self.params["dtype"])
-      outputs = self.decoder_stack(
-          decoder_inputs,
-          encoder_outputs,
-          decoder_self_attention_bias,
-          attention_bias,
-          training=training)
-      logits = self.embedding_softmax_layer(outputs, mode="linear")
-      logits = tf.cast(logits, tf.float32)
-      return logits
-
 
   def predict_2(self, encoder_outputs, attention_bias, training):
     """Generate logits for each value in the target sequence.
@@ -522,108 +472,3 @@ class EncoderStack(tf.keras.layers.Layer):
               encoder_inputs, training=training)
 
     return self.output_normalization(encoder_inputs)
-
-
-class DecoderStack(tf.keras.layers.Layer):
-  """Transformer decoder stack.
-
-  Like the encoder stack, the decoder stack is made up of N identical layers.
-  Each layer is composed of the sublayers:
-    1. Self-attention layer
-    2. Multi-headed attention layer combining encoder outputs with results from
-       the previous self-attention layer.
-    3. Feedforward network (2 fully-connected layers)
-  """
-
-  def __init__(self, params):
-    super(DecoderStack, self).__init__()
-    self.params = params
-    self.layers = []
-
-  def build(self, input_shape):
-    """Builds the decoder stack."""
-    params = self.params
-    for _ in range(params["num_hidden_layers"]):
-      self_attention_layer = attention_layer.SelfAttention(
-          params["hidden_size"], params["num_heads"],
-          params["attention_dropout"])
-      enc_dec_attention_layer = attention_layer.Attention(
-          params["hidden_size"], params["num_heads"],
-          params["attention_dropout"])
-      feed_forward_network = ffn_layer.FeedForwardNetwork(
-          params["hidden_size"], params["filter_size"], params["relu_dropout"])
-
-      self.layers.append([
-          PrePostProcessingWrapper(self_attention_layer, params),
-          PrePostProcessingWrapper(enc_dec_attention_layer, params),
-          PrePostProcessingWrapper(feed_forward_network, params)
-      ])
-    self.output_normalization = tf.keras.layers.LayerNormalization(
-        epsilon=1e-6, dtype="float32")
-    super(DecoderStack, self).build(input_shape)
-
-  def get_config(self):
-    return {
-        "params": self.params,
-    }
-
-  def call(self,
-           decoder_inputs,
-           encoder_outputs,
-           decoder_self_attention_bias,
-           attention_bias,
-           training,
-           cache=None,
-           decode_loop_step=None):
-    """Return the output of the decoder layer stacks.
-
-    Args:
-      decoder_inputs: A tensor with shape
-        [batch_size, target_length, hidden_size].
-      encoder_outputs: A tensor with shape
-        [batch_size, input_length, hidden_size]
-      decoder_self_attention_bias: A tensor with shape
-        [1, 1, target_len, target_length], the bias for decoder self-attention
-        layer.
-      attention_bias: A tensor with shape [batch_size, 1, 1, input_length],
-        the bias for encoder-decoder attention layer.
-      training: A bool, whether in training mode or not.
-      cache: (Used for fast decoding) A nested dictionary storing previous
-        decoder self-attention values. The items are:
-          {layer_n: {"k": A tensor with shape [batch_size, i, key_channels],
-                     "v": A tensor with shape [batch_size, i, value_channels]},
-                       ...}
-      decode_loop_step: An integer, the step number of the decoding loop. Used
-        only for autoregressive inference on TPU.
-
-    Returns:
-      Output of decoder layer stack.
-      float32 tensor with shape [batch_size, target_length, hidden_size]
-    """
-    for n, layer in enumerate(self.layers):
-      self_attention_layer = layer[0]
-      enc_dec_attention_layer = layer[1]
-      feed_forward_network = layer[2]
-
-      # Run inputs through the sublayers.
-      layer_name = "layer_%d" % n
-      layer_cache = cache[layer_name] if cache is not None else None
-      with tf.name_scope(layer_name):
-        with tf.name_scope("self_attention"):
-          decoder_inputs = self_attention_layer(
-              decoder_inputs,
-              decoder_self_attention_bias,
-              training=training,
-              cache=layer_cache,
-              decode_loop_step=decode_loop_step)
-        with tf.name_scope("encdec_attention"):
-          decoder_inputs = enc_dec_attention_layer(
-              decoder_inputs,
-              encoder_outputs,
-              attention_bias,
-              training=training)
-        with tf.name_scope("ffn"):
-          decoder_inputs = feed_forward_network(
-              decoder_inputs, training=training)
-
-    return self.output_normalization(decoder_inputs)
