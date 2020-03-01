@@ -4,6 +4,7 @@ import numpy as np
 import json
 import argparse
 
+
 def main():
     """
     Extract features from outfit images and save to .tfrecord files
@@ -21,7 +22,11 @@ def main():
     output_template = args.tfrecord_template
     shard_count = args.shard_count
 
+    print("Arguments parsed", flush=True)
+
     examples = process_dataset(dataset_root, dataset_filename, with_features=True)
+
+    print("Processed " + str(len(examples)) + " examples", flush=True)
 
     files_per_dataset = shard_count
     outfits_per_file = len(examples) // files_per_dataset
@@ -43,6 +48,7 @@ def main():
         if i == len(examples):
             if writer is not None:
                 writer.close()
+    print("Saved the dataset successfully", flush=True)
 
 
 def _bytes_feature(value):
