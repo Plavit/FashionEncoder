@@ -92,6 +92,8 @@ def main():
 
     arg_dict = vars(args)
 
+    filtered = {k: v for k, v in arg_dict.items() if v is not None}
+
     if "dataset_files" in arg_dict and not isinstance(arg_dict["dataset_files"], list):
         arg_dict["dataset_files"] = [arg_dict["dataset_files"]]
 
@@ -105,12 +107,12 @@ def main():
         "max_length": 10,
         "default_batch_size": 128,
         "filter_size": 1024,
-        "layer_postprocess_dropout":0.1,
-        "attention_dropout":0.1,
-        "relu_dropout":0.1
+        "layer_postprocess_dropout": 0.1,
+        "attention_dropout": 0.1,
+        "relu_dropout": 0.1
     }
 
-    params.update(arg_dict)
+    params.update(filtered)
 
     task = EncoderTask(params)
 
