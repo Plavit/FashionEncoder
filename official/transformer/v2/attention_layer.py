@@ -124,20 +124,15 @@ class Attention(tf.keras.layers.Layer):
     depth = (self.hidden_size // self.num_heads)
     query *= depth ** -0.5
 
-    print(key.shape, flush=True)
-    print(query.shape, flush=True)
-
     # Calculate dot product attention
     logits = tf.einsum("BTNH,BFNH->BNFT", key, query)
-    print(logits.shape, flush=True)
+
     logits += bias
-    print(logits.shape, flush=True)
     # Note that softmax internally performs math operations using float32
     # for numeric stability. When training with float16, we keep the input
     # and output in float16 for better performance.
     weights = tf.nn.softmax(logits, name="attention_weights")
-    print(weights.shape, flush=True)
-    print(value.shape, flush=True)
+
     if training:
       weights = tf.nn.dropout(weights, rate=self.attention_dropout)
     attention_output = tf.einsum("BNFT,BTNH->BFNH", weights, value)

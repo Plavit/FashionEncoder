@@ -28,8 +28,7 @@ from official.transformer.utils.tokenizer import EOS_ID
 from official.transformer.v2 import attention_layer
 from official.transformer.v2 import beam_search
 from official.transformer.v2 import ffn_layer
-from official.transformer.v2 import metrics
-
+import models.transformer.metrics as metrics
 
 # Disable the not-callable lint error, since it claims many objects are not
 # callable when they actually are.
@@ -41,23 +40,17 @@ def create_model(params, is_train):
 
   with tf.name_scope("model"):
     if is_train:
-      inputs = tf.keras.layers.Input((None, params["feature_dim"]), dtype="float32", name="inputs")
-      targets = tf.keras.layers.Input((None, params["feature_dim"]), dtype="float32", name="targets")
-      internal_model = FashionEncoder(params, name="transformer_v2")
-      logits = internal_model([inputs, targets], training=True)
-      vocab_size = params["vocab_size"]
-      label_smoothing = params["label_smoothing"]
-      if params["enable_metrics_in_training"]:
-        logits = metrics.MetricLayer(vocab_size)([logits, targets])
-      logits = tf.keras.layers.Lambda(lambda x: x, name="logits",
-                                      dtype=tf.float32)(logits)
-      model = tf.keras.Model([inputs, targets], logits)
-      # TODO(reedwm): Can we do this loss in float16 instead of float32?
-      loss = metrics.transformer_loss(
-          logits, targets, label_smoothing, vocab_size)
-      model.add_loss(loss)
-      return model
+        inputs = tf.keras.layers.Input((None, params["feature_dim"]), dtype="float32", name="inputs")
+        internal_model = FashionEncoder(params, name="transformer_v2")
+        ret = internal_model([inputs], training=True)
+        internal_model.summary()
+        # outputs, scores = ret["outputs"], ret["scores"]
+        return tf.keras.Model(inputs, [ret])
 
+      # Add custom loss
+      # loss = metrics.xentropy_loss(inputs, targets)
+      # model.add_loss(loss)
+      # return model
     else:
       inputs = tf.keras.layers.Input((None, params["feature_dim"]), dtype="float32", name="inputs")
       internal_model = FashionEncoder(params, name="transformer_v2")
@@ -137,22 +130,12 @@ class FashionEncoder(tf.keras.Model):
       reduced_inputs = tf.equal(inputs, 0)  # TODO: Change padding value to NaN ?
       reduced_inputs = tf.reduce_all(reduced_inputs, axis=2)
       attention_bias = model_utils.get_padding_bias(reduced_inputs, True)
-      print("inputs", flush=True)
-      print(inputs.shape, flush=True)
-
-      print("attention_bias", flush=True)
-      print(attention_bias.shape, flush=True)
 
       # Run the inputs through the encoder layer to map the symbol
       # representations to continuous representations.
       encoder_outputs = self.encode(inputs, attention_bias, training)
-      # Generate output sequence if targets is None, or return logits if target
-      # sequence is known.
-      if targets is None:
-        return encoder_outputs
-      else:
-        logits = self.decode(targets, encoder_outputs, attention_bias, training)
-        return logits
+
+      return encoder_outputs
 
   def encode(self, inputs, attention_bias, training):
     """Generate continuous representation for inputs.
