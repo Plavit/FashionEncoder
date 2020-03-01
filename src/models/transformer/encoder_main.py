@@ -74,7 +74,7 @@ class EncoderTask:
 
         save_path = manager.save()
         print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path))
-        print("Trained on " + batch_number + " batches in total.")
+        print("Trained on " + str(batch_number) + " batches in total.")
 
 
 def main():
