@@ -28,7 +28,6 @@ from official.transformer.utils.tokenizer import EOS_ID
 from official.transformer.v2 import attention_layer
 from official.transformer.v2 import beam_search
 from official.transformer.v2 import ffn_layer
-import models.transformer.metrics as metrics
 
 # Disable the not-callable lint error, since it claims many objects are not
 # callable when they actually are.

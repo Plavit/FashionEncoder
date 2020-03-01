@@ -115,3 +115,6 @@ def main():
         task.train()
     else:
         print("Invalid mode")
+
+
+main()
