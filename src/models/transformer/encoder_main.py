@@ -104,7 +104,10 @@ def main():
         "num_heads": 2,
         "max_length": 10,
         "default_batch_size": 128,
-        "filter_size": 1024
+        "filter_size": 1024,
+        "layer_postprocess_dropout":0.1,
+        "attention_dropout":0.1,
+        "relu_dropout":0.1
     }
 
     params.update(arg_dict)
