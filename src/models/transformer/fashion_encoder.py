@@ -85,7 +85,9 @@ class FashionEncoder(tf.keras.Model):
     # self.embedding_softmax_layer = embedding_layer.EmbeddingSharedWeights(
     #     params["vocab_size"], params["hidden_size"])
     # TODO: Skip embedding
-
+    self.input_dense = tf.keras.layers.Dense(self.params["hidden_size"], activation="relu",
+                                        input_shape=(None, None, self.params["feature_dim"]))
+    self.output_dense = tf.keras.layers.Dense(self.params["feature_dim"], activation="relu")
     self.encoder_stack = EncoderStack(params)
 
   def get_config(self):
@@ -124,17 +126,22 @@ class FashionEncoder(tf.keras.Model):
     # Variance scaling is used here because it seems to work in many problems.
     # Other reasonable initializers may also work just as well.
     with tf.name_scope("Transformer"):
+      print("Before dense", flush=True)
+      print(inputs.shape, flush=True)
+      inputs = self.input_dense(inputs)
+      print("After dense", flush=True)
+      print(inputs.shape, flush=True)
       # Calculate attention bias for encoder self-attention and decoder
       # multi-headed attention layers.
-      reduced_inputs = tf.equal(inputs, 0)  # TODO: Change padding value to NaN ?
+      reduced_inputs = tf.equal(inputs, 0)
       reduced_inputs = tf.reduce_all(reduced_inputs, axis=2)
       attention_bias = model_utils.get_padding_bias(reduced_inputs, True)
 
       # Run the inputs through the encoder layer to map the symbol
       # representations to continuous representations.
       encoder_outputs = self.encode(inputs, attention_bias, training)
-
-      return encoder_outputs
+      output = self.output_dense(encoder_outputs)
+      return output
 
   def encode(self, inputs, attention_bias, training):
     """Generate continuous representation for inputs.
