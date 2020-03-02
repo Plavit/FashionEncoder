@@ -1,5 +1,7 @@
 import argparse
 import datetime
+import time
+
 import tensorflow as tf
 import src.models.transformer.metrics as metrics
 import src.models.transformer.fashion_encoder as fashion_enc
@@ -22,7 +24,12 @@ class EncoderTask:
 
         print(self.params, flush=True)
 
+        strategy = tf.distribute.MirroredStrategy()
+
+        print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
+
         train_dataset = input_pipeline.get_training_dataset(self.params["dataset_files"], self.params["batch_size"])
+        train_dataset = strategy.experimental_distribute_dataset(train_dataset)
         num_epochs = self.params["epoch_count"]
         optimizer = tf.optimizers.Adam()
 
@@ -114,12 +121,19 @@ def main():
 
     params.update(filtered)
 
+    start_time = time.time()
+
     task = EncoderTask(params)
 
     if args.mode == "train":
         task.train()
     else:
         print("Invalid mode")
+
+    end_time = time.time()
+    elapsed = end_time - start_time
+
+    print("Task completed in " + str(elapsed) + " seconds")
 
 
 main()
