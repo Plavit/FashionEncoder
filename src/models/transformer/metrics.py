@@ -24,5 +24,5 @@ def xentropy_loss(y_pred, y_true):
     items_in_batch = tf.reduce_sum(weights)
 
     return tf.reduce_sum(
-        tf.tensordot(tf.nn.softmax_cross_entropy_with_logits(labels, logits), weights)
+        tf.tensordot(tf.nn.softmax_cross_entropy_with_logits(labels, logits), weights, 1)
     ) / items_in_batch

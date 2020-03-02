@@ -76,3 +76,4 @@ models/*.h5
 results/
 *.py[cod]
 .idea/
+logs/
