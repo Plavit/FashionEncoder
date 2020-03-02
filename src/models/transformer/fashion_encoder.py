@@ -86,9 +86,9 @@ class FashionEncoder(tf.keras.Model):
     #     params["vocab_size"], params["hidden_size"])
     # TODO: Skip embedding
     self.input_dense = tf.keras.layers.Dense(self.params["hidden_size"], activation="relu",
-                                        input_shape=(None, None, self.params["feature_dim"]), name="Input Dense")
+                                        input_shape=(None, None, self.params["feature_dim"]), name="dense_input")
     self.encoder_stack = EncoderStack(params)
-    self.output_dense = tf.keras.layers.Dense(self.params["feature_dim"], activation="relu", name="Output Dense")
+    self.output_dense = tf.keras.layers.Dense(self.params["feature_dim"], activation="relu", name="dense_output")
 
   def get_config(self):
     return {
@@ -126,11 +126,7 @@ class FashionEncoder(tf.keras.Model):
     # Variance scaling is used here because it seems to work in many problems.
     # Other reasonable initializers may also work just as well.
     with tf.name_scope("Transformer"):
-      print("Before dense", flush=True)
-      print(inputs.shape, flush=True)
       inputs = self.input_dense(inputs)
-      print("After dense", flush=True)
-      print(inputs.shape, flush=True)
       # Calculate attention bias for encoder self-attention and decoder
       # multi-headed attention layers.
       reduced_inputs = tf.equal(inputs, 0)
