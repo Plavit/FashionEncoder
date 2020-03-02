@@ -20,7 +20,7 @@ def xentropy_loss(y_pred, y_true):
     weights = tf.equal(labels, 0)
     weights = tf.reduce_all(weights, axis=1)
     weights = tf.math.logical_not(weights)
-    weights = tf.cast(weights, dtype="int32")
+    weights = tf.cast(weights, dtype="float32")
     items_in_batch = tf.reduce_sum(weights)
 
     return tf.reduce_sum(
