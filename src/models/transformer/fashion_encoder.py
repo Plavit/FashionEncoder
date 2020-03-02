@@ -86,9 +86,9 @@ class FashionEncoder(tf.keras.Model):
     #     params["vocab_size"], params["hidden_size"])
     # TODO: Skip embedding
     self.input_dense = tf.keras.layers.Dense(self.params["hidden_size"], activation="relu",
-                                        input_shape=(None, None, self.params["feature_dim"]))
-    self.output_dense = tf.keras.layers.Dense(self.params["feature_dim"], activation="relu")
+                                        input_shape=(None, None, self.params["feature_dim"]), name="Input Dense")
     self.encoder_stack = EncoderStack(params)
+    self.output_dense = tf.keras.layers.Dense(self.params["feature_dim"], activation="relu", name="Output Dense")
 
   def get_config(self):
     return {
