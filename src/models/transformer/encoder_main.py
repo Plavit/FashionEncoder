@@ -15,7 +15,7 @@ class EncoderTask:
         self.model = fashion_enc.create_model(params, True)
 
     @staticmethod
-    def _grad(model: tf.keras.Model, inputs, targets, num_replicas=1):
+    def _grad(model: tf.keras.Model, inputs, targets, acc=None, num_replicas=1):
         with tf.GradientTape() as tape:
             loss_value = metrics.xentropy_loss(model(inputs, training=True), targets) / num_replicas
         return loss_value, tape.gradient(loss_value, model.trainable_variables)
@@ -55,7 +55,7 @@ class EncoderTask:
             # Training loop
             for x, y in train_dataset:
                 # Optimize the model
-                loss_value, grads = self._grad(model, x, y)
+                loss_value, grads = self._grad(model, x, y, categorical_acc)
                 optimizer.apply_gradients(zip(grads, model.trainable_variables))
 
                 ckpt.step.assign_add(1)
@@ -63,7 +63,6 @@ class EncoderTask:
                 # Track progress
                 epoch_loss_avg(loss_value)  # Add current batch loss
                 train_loss(loss_value)
-                metrics.categorical_acc(x, y, categorical_acc)
 
                 with train_summary_writer.as_default():
                     tf.summary.scalar('loss', train_loss.result(), step=batch_number)

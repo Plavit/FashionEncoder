@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 
-def xentropy_loss(y_pred, y_true):
+def xentropy_loss(y_pred, y_true, acc = None):
     feature_dim = y_pred.shape[2]
 
     # Reshape to batch (size * seq length, feature dim)
@@ -21,6 +21,9 @@ def xentropy_loss(y_pred, y_true):
     weights = tf.math.logical_not(weights)
     weights = tf.cast(weights, dtype="float32")
     items_in_batch = tf.reduce_sum(weights)
+
+    if acc is not None:
+        acc(labels, logits, sample_weight=weights)
 
     cross_entropy = tf.nn.softmax_cross_entropy_with_logits(labels=labels, logits=logits)
     cross_entropy = tf.tensordot(cross_entropy, weights, 1)
