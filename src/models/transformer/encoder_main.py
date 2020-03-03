@@ -67,6 +67,7 @@ class EncoderTask:
 
                 with train_summary_writer.as_default():
                     tf.summary.scalar('loss', train_loss.result(), step=batch_number)
+                    tf.summary.scalar('batch_acc', categorical_acc.result(), step=epoch)
                 batch_number = batch_number + 1
             with train_summary_writer.as_default():
                 tf.summary.scalar('epoch_loss', epoch_loss_avg.result(), step=epoch)
