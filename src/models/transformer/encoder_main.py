@@ -51,6 +51,7 @@ class EncoderTask:
         for epoch in range(num_epochs):
             epoch_loss_avg = tf.keras.metrics.Mean('epoch_loss')
             train_loss = tf.keras.metrics.Mean('train_loss', dtype=tf.float32)
+            categorical_acc = tf.metrics.CategoricalAccuracy()
             # Training loop
             for x, y in train_dataset:
                 # Optimize the model
@@ -62,15 +63,17 @@ class EncoderTask:
                 # Track progress
                 epoch_loss_avg(loss_value)  # Add current batch loss
                 train_loss(loss_value)
+                metrics.categorical_acc(x, y, categorical_acc)
 
                 with train_summary_writer.as_default():
                     tf.summary.scalar('loss', train_loss.result(), step=batch_number)
                 batch_number = batch_number + 1
             with train_summary_writer.as_default():
                 tf.summary.scalar('epoch_loss', epoch_loss_avg.result(), step=epoch)
+                tf.summary.scalar('epoch_acc', categorical_acc.result(), step=epoch)
 
             if epoch % 1 == 0:
-                print("Epoch {:03d}: Loss: {:.3f}".format(epoch, epoch_loss_avg.result()))
+                print("Epoch {:03d}: Loss: {:.3f}, Acc: {:.3f}".format(epoch, epoch_loss_avg.result(), categorical_acc.result()))
                 save_path = manager.save()
                 print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path))
 
