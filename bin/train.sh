@@ -5,4 +5,4 @@ python -m "src.models.transformer.encoder_main" \
   --batch-size 128 \
   --epoch-count 100 \
   --mode "train" \
-  --hidden-size 512
+  --hidden-size 2048
