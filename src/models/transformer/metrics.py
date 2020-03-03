@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 
-def xentropy_loss(y_pred, y_true, acc = None):
+def xentropy_loss(y_pred, y_true, acc=None):
     feature_dim = y_pred.shape[2]
 
     # Reshape to batch (size * seq length, feature dim)

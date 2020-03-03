@@ -17,7 +17,7 @@ class EncoderTask:
     @staticmethod
     def _grad(model: tf.keras.Model, inputs, targets, acc=None, num_replicas=1):
         with tf.GradientTape() as tape:
-            loss_value = metrics.xentropy_loss(model(inputs, training=True), targets) / num_replicas
+            loss_value = metrics.xentropy_loss(model(inputs, training=True), targets, acc) / num_replicas
         return loss_value, tape.gradient(loss_value, model.trainable_variables)
 
     def train(self):
