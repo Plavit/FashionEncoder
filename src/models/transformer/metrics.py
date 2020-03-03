@@ -47,6 +47,5 @@ def categorical_acc(y_pred, y_true, acc: tf.metrics.CategoricalAccuracy):
     weights = tf.reduce_all(weights, axis=1)
     weights = tf.math.logical_not(weights)
     weights = tf.cast(weights, dtype="float32")
-    items_in_batch = tf.reduce_sum(weights)
 
-    acc.update_state(labels, logits, sample_weight=weights)
+    acc(labels, logits, sample_weight=weights)
