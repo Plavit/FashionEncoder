@@ -25,6 +25,7 @@ class EncoderTask:
         print(self.params, flush=True)
 
         train_dataset = input_pipeline.get_training_dataset(self.params["dataset_files"], self.params["batch_size"])
+        test_dataset = input_pipeline.get_training_dataset(self.params["test_files"], self.params["batch_size"])
         num_epochs = self.params["epoch_count"]
         optimizer = tf.optimizers.Adam()
 
@@ -72,8 +73,24 @@ class EncoderTask:
                 tf.summary.scalar('epoch_loss', epoch_loss_avg.result(), step=epoch)
                 tf.summary.scalar('epoch_acc', categorical_acc.result(), step=epoch)
 
-            if epoch % 1 == 0:
+            # Validation loop
+            valid_loss = tf.keras.metrics.Mean('valid_loss', dtype=tf.float32)
+            valid_acc = tf.metrics.CategoricalAccuracy()
+            for x, y in test_dataset:
+                # Optimize the model
+                loss_value = metrics.xentropy_loss(model(x), y, valid_acc)
+
+                # Track
+                valid_loss(loss_value)
+
+                with train_summary_writer.as_default():
+                    tf.summary.scalar('valid_loss', valid_loss.result(), step=epoch)
+                    tf.summary.scalar('valid_acc', valid_acc.result(), step=epoch)
+                batch_number = batch_number + 1
+
+            if epoch % 5 == 0:
                 print("Epoch {:03d}: Loss: {:.3f}, Acc: {:.3f}".format(epoch, epoch_loss_avg.result(), categorical_acc.result()))
+                print("Epoch {:03d}: Valid loss: {:.3f}, Valid Acc: {:.3f}".format(epoch, valid_loss.result(), valid_acc.result()))
                 save_path = manager.save()
                 print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path))
 
@@ -155,6 +172,7 @@ class EncoderTask:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset-files", type=str, nargs="+", help="Paths to dataset files")
+    parser.add_argument("--test-files", type=str, nargs="+", help="Paths to test dataset files")
     parser.add_argument("--batch-size", type=int, help="Batch size")
     parser.add_argument("--epoch-count", type=int, help="Number of epochs")
     parser.add_argument("--mode", type=str, help="Type of action", choices=["train", "train_multi"], required=True)
@@ -162,6 +180,7 @@ def main():
     parser.add_argument("--num-heads", type=int, help="Number of heads")
     parser.add_argument("--num-hidden-layers", type=int, help="Number of hidden layers")
     parser.add_argument("--checkpoint-dir", type=str, help="Checkpoint directory")
+    parser.add_argument("--masking-mode", type=str, help="Mode of sequence masking", choices=["single-token"])
 
     args = parser.parse_args()
 
@@ -171,6 +190,9 @@ def main():
 
     if "dataset_files" in arg_dict and not isinstance(arg_dict["dataset_files"], list):
         arg_dict["dataset_files"] = [arg_dict["dataset_files"]]
+
+    if "test_files" in arg_dict and not isinstance(arg_dict["test_files"], list):
+        arg_dict["test_files"] = [arg_dict["test_files"]]
 
     params = {
         "feature_dim": 2048,

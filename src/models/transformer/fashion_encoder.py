@@ -45,11 +45,6 @@ def create_model(params, is_train):
         internal_model.summary()
         # outputs, scores = ret["outputs"], ret["scores"]
         return tf.keras.Model(inputs, [ret])
-
-      # Add custom loss
-      # loss = metrics.xentropy_loss(inputs, targets)
-      # model.add_loss(loss)
-      # return model
     else:
       inputs = tf.keras.layers.Input((None, params["feature_dim"]), dtype="float32", name="inputs")
       internal_model = FashionEncoder(params, name="transformer_v2")
@@ -81,14 +76,15 @@ class FashionEncoder(tf.keras.Model):
     super(FashionEncoder, self).__init__(name=name)
     self.params = params
 
-    # TODO: Change embedding layer
-    # self.embedding_softmax_layer = embedding_layer.EmbeddingSharedWeights(
-    #     params["vocab_size"], params["hidden_size"])
-    # TODO: Skip embedding
+    self.tokens_embedding = tf.keras.layers.Embedding(input_dim=1,
+                                                      output_dim=self.params["feature_dim"],
+                                                      name="tokens_embedding")
+
     self.input_dense = tf.keras.layers.Dense(self.params["hidden_size"], activation="relu",
-                                        input_shape=(None, None, self.params["feature_dim"]), name="dense_input")
+                                             input_shape=(None, None, self.params["feature_dim"]), name="dense_input")
     self.encoder_stack = EncoderStack(params)
     self.output_dense = tf.keras.layers.Dense(self.params["feature_dim"], activation="relu", name="dense_output")
+    self.general_mask_id = tf.constant([0])
 
   def get_config(self):
     return {
@@ -123,6 +119,20 @@ class FashionEncoder(tf.keras.Model):
       # Decoding path.
       inputs, targets = inputs[0], None
 
+    inputs, categories, mask_positions = inputs
+
+    if self.params["masking_mode"] == "single-token":
+        mask_tensor = self.tokens_embedding(self.general_mask_id)
+        print("mask")
+        print(mask_tensor)
+        mask_tensors = tf.repeat(mask_tensor, mask_positions.shape[0])
+        print(mask_tensors)
+        r = tf.range(0, limit=tf.shape(mask_positions)[0], dtype="int32")
+        r = tf.reshape(r, shape=[r.shape[0], -1, 1])
+        indices = tf.squeeze(tf.concat([r, mask_positions], axis=-1))
+        print(indices)
+        inputs = tf.tensor_scatter_nd_update(inputs, indices, mask_tensors)
+
     # Variance scaling is used here because it seems to work in many problems.
     # Other reasonable initializers may also work just as well.
     with tf.name_scope("Transformer"):
@@ -132,6 +142,7 @@ class FashionEncoder(tf.keras.Model):
       reduced_inputs = tf.equal(inputs, 0)
       reduced_inputs = tf.reduce_all(reduced_inputs, axis=2)
       attention_bias = model_utils.get_padding_bias(reduced_inputs, True)
+
 
       # Run the inputs through the encoder layer to map the symbol
       # representations to continuous representations.
