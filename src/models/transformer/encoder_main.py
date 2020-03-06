@@ -17,7 +17,8 @@ class EncoderTask:
     @staticmethod
     def _grad(model: tf.keras.Model, inputs, targets, acc=None, num_replicas=1):
         with tf.GradientTape() as tape:
-            loss_value = metrics.xentropy_loss(model(inputs, training=True), targets, acc) / num_replicas
+            loss_value = metrics.xentropy_loss(model([inputs[0], inputs[1], inputs[2]], training=True),
+                                               tf.stop_gradient(targets), inputs[1], inputs[2], acc) / num_replicas
         return loss_value, tape.gradient(loss_value, model.trainable_variables)
 
     def train(self):
@@ -27,7 +28,7 @@ class EncoderTask:
         train_dataset = input_pipeline.get_training_dataset(self.params["dataset_files"], self.params["batch_size"])
         test_dataset = input_pipeline.get_training_dataset(self.params["test_files"], self.params["batch_size"])
         num_epochs = self.params["epoch_count"]
-        optimizer = tf.optimizers.Adam()
+        optimizer = tf.optimizers.Adam(self.params["learning_rate"])
 
         model = fashion_enc.create_model(self.params, True)
         model.summary()
@@ -67,29 +68,28 @@ class EncoderTask:
 
                 with train_summary_writer.as_default():
                     tf.summary.scalar('loss', train_loss.result(), step=batch_number)
-                    tf.summary.scalar('batch_acc', categorical_acc.result(), step=epoch)
+                    tf.summary.scalar('batch_acc', categorical_acc.result(), step=batch_number)
                 batch_number = batch_number + 1
             with train_summary_writer.as_default():
                 tf.summary.scalar('epoch_loss', epoch_loss_avg.result(), step=epoch)
                 tf.summary.scalar('epoch_acc', categorical_acc.result(), step=epoch)
 
-            # Validation loop
-            valid_loss = tf.keras.metrics.Mean('valid_loss', dtype=tf.float32)
-            valid_acc = tf.metrics.CategoricalAccuracy()
-            for x, y in test_dataset:
-                # Optimize the model
-                loss_value = metrics.xentropy_loss(model(x), y, valid_acc)
-
-                # Track
-                valid_loss(loss_value)
+            print("Epoch {:03d}: Loss: {:.3f}, Acc: {:.3f}".format(epoch, epoch_loss_avg.result(),
+                                                                   categorical_acc.result()))
+            if epoch % 5 == 0:
+                # Validation loop
+                valid_loss = tf.keras.metrics.Mean('valid_loss', dtype=tf.float32)
+                valid_acc = tf.metrics.CategoricalAccuracy()
+                for x, y in test_dataset:
+                    # Optimize the model
+                    loss_value = metrics.xentropy_loss(model([x[0], x[1], x[2]], training=True), tf.stop_gradient(y),
+                                                       x[1], x[2], valid_acc)
+                    # Track
+                    valid_loss(loss_value)
 
                 with train_summary_writer.as_default():
                     tf.summary.scalar('valid_loss', valid_loss.result(), step=epoch)
                     tf.summary.scalar('valid_acc', valid_acc.result(), step=epoch)
-                batch_number = batch_number + 1
-
-            if epoch % 5 == 0:
-                print("Epoch {:03d}: Loss: {:.3f}, Acc: {:.3f}".format(epoch, epoch_loss_avg.result(), categorical_acc.result()))
                 print("Epoch {:03d}: Valid loss: {:.3f}, Valid Acc: {:.3f}".format(epoch, valid_loss.result(), valid_acc.result()))
                 save_path = manager.save()
                 print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path))
@@ -181,6 +181,7 @@ def main():
     parser.add_argument("--num-hidden-layers", type=int, help="Number of hidden layers")
     parser.add_argument("--checkpoint-dir", type=str, help="Checkpoint directory")
     parser.add_argument("--masking-mode", type=str, help="Mode of sequence masking", choices=["single-token"])
+    parser.add_argument("--learning-rate", type=float, help="Optimizer's learning rate")
 
     args = parser.parse_args()
 
@@ -206,7 +207,8 @@ def main():
         "filter_size": 1024,
         "layer_postprocess_dropout": 0.1,
         "attention_dropout": 0.1,
-        "relu_dropout": 0.1
+        "relu_dropout": 0.1,
+        "learning_rate": 0.001
     }
 
     params.update(filtered)

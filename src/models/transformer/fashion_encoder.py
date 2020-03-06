@@ -40,18 +40,22 @@ def create_model(params, is_train):
   with tf.name_scope("model"):
     if is_train:
         inputs = tf.keras.layers.Input((None, params["feature_dim"]), dtype="float32", name="inputs")
+        categories = tf.keras.layers.Input((None,), dtype="int32", name="categories")
+        mask_positions = tf.keras.layers.Input((None, 1), dtype="int32", name="mask_positions")
         internal_model = FashionEncoder(params, name="transformer_v2")
-        ret = internal_model([inputs], training=True)
+        ret = internal_model([inputs, categories, mask_positions], training=True)
         internal_model.summary()
         # outputs, scores = ret["outputs"], ret["scores"]
-        return tf.keras.Model(inputs, [ret])
+        return tf.keras.Model([inputs, categories, mask_positions], [ret])
     else:
-      inputs = tf.keras.layers.Input((None, params["feature_dim"]), dtype="float32", name="inputs")
-      internal_model = FashionEncoder(params, name="transformer_v2")
-      ret = internal_model([inputs], training=False)
-      internal_model.summary()
-      # outputs, scores = ret["outputs"], ret["scores"]
-      return tf.keras.Model(inputs, [ret])
+        inputs = tf.keras.layers.Input((None, params["feature_dim"]), dtype="float32", name="inputs")
+        categories = tf.keras.layers.Input((None,), dtype="int32", name="categories")
+        mask_positions = tf.keras.layers.Input((None, 1), dtype="int32", name="mask_positions")
+        internal_model = FashionEncoder(params, name="transformer_v2")
+        ret = internal_model([inputs, categories, mask_positions], training=False)
+        internal_model.summary()
+        # outputs, scores = ret["outputs"], ret["scores"]
+        return tf.keras.Model([inputs, categories, mask_positions], [ret])
 
 
 class FashionEncoder(tf.keras.Model):
@@ -113,40 +117,32 @@ class FashionEncoder(tf.keras.Model):
     Raises:
       NotImplementedError: If try to use padded decode method on CPU/GPUs.
     """
-    if len(inputs) == 2:
-      inputs, targets = inputs[0], inputs[1]
-    else:
-      # Decoding path.
-      inputs, targets = inputs[0], None
 
-    inputs, categories, mask_positions = inputs
+    inputs, categories, mask_positions = inputs[0], inputs[1], inputs[2]
 
     if self.params["masking_mode"] == "single-token":
         mask_tensor = self.tokens_embedding(self.general_mask_id)
-        print("mask")
-        print(mask_tensor)
-        mask_tensors = tf.repeat(mask_tensor, mask_positions.shape[0])
-        print(mask_tensors)
+        mask_tensors = tf.repeat(mask_tensor, tf.shape(mask_positions)[0])
+        mask_tensors = tf.reshape(mask_tensors, shape=(-1, self.params["feature_dim"]))
         r = tf.range(0, limit=tf.shape(mask_positions)[0], dtype="int32")
-        r = tf.reshape(r, shape=[r.shape[0], -1, 1])
+        r = tf.reshape(r, shape=[tf.shape(r)[0], -1, 1])
         indices = tf.squeeze(tf.concat([r, mask_positions], axis=-1))
-        print(indices)
-        inputs = tf.tensor_scatter_nd_update(inputs, indices, mask_tensors)
+        masked_inputs = tf.tensor_scatter_nd_update(inputs, indices, mask_tensors)
 
     # Variance scaling is used here because it seems to work in many problems.
     # Other reasonable initializers may also work just as well.
     with tf.name_scope("Transformer"):
-      inputs = self.input_dense(inputs)
+      encoder_inputs = self.input_dense(masked_inputs)
       # Calculate attention bias for encoder self-attention and decoder
       # multi-headed attention layers.
-      reduced_inputs = tf.equal(inputs, 0)
+      reduced_inputs = tf.equal(encoder_inputs, 0)
       reduced_inputs = tf.reduce_all(reduced_inputs, axis=2)
       attention_bias = model_utils.get_padding_bias(reduced_inputs, True)
 
 
       # Run the inputs through the encoder layer to map the symbol
       # representations to continuous representations.
-      encoder_outputs = self.encode(inputs, attention_bias, training)
+      encoder_outputs = self.encode(encoder_inputs, attention_bias, training)
       output = self.output_dense(encoder_outputs)
       return output
 
