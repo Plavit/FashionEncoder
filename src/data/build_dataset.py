@@ -87,9 +87,11 @@ def process_dataset(dataset_root, dataset_filename, with_features: bool = False)
         raw_json = json.load(json_file)
         print("Loaded " + str(len(raw_json)) + " items", flush=True)
         examples = []
-        model = tf.keras.applications.inception_v3.InceptionV3(weights="imagenet", include_top=False, pooling="avg")
 
-        for outfit in raw_json:
+        if with_features:
+            model = tf.keras.applications.inception_v3.InceptionV3(weights="imagenet", include_top=False, pooling="avg")
+
+        for outfit in raw_json[:5]:
             set_id = int(outfit["set_id"])
             images = []
             categories = []
