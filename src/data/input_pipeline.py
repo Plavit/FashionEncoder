@@ -28,6 +28,8 @@ def add_special_token_positions(features, categories):
 
 def get_training_dataset(filenames, batch_size):
     outfits = get_dataset(filenames)
-    outfits = outfits.map(add_special_token_positions)
+    outfits = outfits.map(add_special_token_positions, tf.data.experimental.AUTOTUNE)
     outfits = outfits.padded_batch(batch_size, ([None, 2048], [None], [None, 1]), drop_remainder=True)
-    return outfits.map(append_targets)
+    return outfits.map(append_targets, tf.data.experimental.AUTOTUNE)\
+        .cache()\
+        .prefetch(tf.data.experimental.AUTOTUNE)

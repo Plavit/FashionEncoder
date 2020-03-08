@@ -1,5 +1,6 @@
 import argparse
 import datetime
+import logging
 import time
 
 import tensorflow as tf
@@ -26,7 +27,7 @@ class EncoderTask:
         print(self.params, flush=True)
 
         train_dataset = input_pipeline.get_training_dataset(self.params["dataset_files"], self.params["batch_size"])
-        test_dataset = input_pipeline.get_training_dataset(self.params["test_files"], self.params["batch_size"])
+        test_dataset = input_pipeline.get_training_dataset(self.params["test_files"], self.params["valid_batch_size"])
         num_epochs = self.params["epoch_count"]
         optimizer = tf.optimizers.Adam(self.params["learning_rate"])
 
@@ -36,7 +37,7 @@ class EncoderTask:
         current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         train_log_dir = 'logs/' + current_time + '/train'
         train_summary_writer = tf.summary.create_file_writer(train_log_dir)
-        batch_number = 1
+        batch_number = 0
 
         ckpt = tf.train.Checkpoint(step=tf.Variable(1), optimizer=optimizer, model=model)
 
@@ -50,12 +51,14 @@ class EncoderTask:
         else:
             print("Initializing from scratch.", flush=True)
 
-        for epoch in range(num_epochs):
+        for epoch in range(1, num_epochs + 1):
             epoch_loss_avg = tf.keras.metrics.Mean('epoch_loss')
             train_loss = tf.keras.metrics.Mean('train_loss', dtype=tf.float32)
             categorical_acc = tf.metrics.CategoricalAccuracy()
             # Training loop
             for x, y in train_dataset:
+                batch_number = batch_number + 1
+
                 # Optimize the model
                 loss_value, grads = self._grad(model, x, y, categorical_acc)
                 optimizer.apply_gradients(zip(grads, model.trainable_variables))
@@ -69,7 +72,7 @@ class EncoderTask:
                 with train_summary_writer.as_default():
                     tf.summary.scalar('loss', train_loss.result(), step=batch_number)
                     tf.summary.scalar('batch_acc', categorical_acc.result(), step=batch_number)
-                batch_number = batch_number + 1
+
             with train_summary_writer.as_default():
                 tf.summary.scalar('epoch_loss', epoch_loss_avg.result(), step=epoch)
                 tf.summary.scalar('epoch_acc', categorical_acc.result(), step=epoch)
@@ -174,6 +177,7 @@ def main():
     parser.add_argument("--dataset-files", type=str, nargs="+", help="Paths to dataset files")
     parser.add_argument("--test-files", type=str, nargs="+", help="Paths to test dataset files")
     parser.add_argument("--batch-size", type=int, help="Batch size")
+    parser.add_argument("--filter-size", type=int, help="Transformer filter size")
     parser.add_argument("--epoch-count", type=int, help="Number of epochs")
     parser.add_argument("--mode", type=str, help="Type of action", choices=["train", "train_multi"], required=True)
     parser.add_argument("--hidden-size", type=int, help="Hidden size")
@@ -182,6 +186,8 @@ def main():
     parser.add_argument("--checkpoint-dir", type=str, help="Checkpoint directory")
     parser.add_argument("--masking-mode", type=str, help="Mode of sequence masking", choices=["single-token"])
     parser.add_argument("--learning-rate", type=float, help="Optimizer's learning rate")
+    parser.add_argument("--valid-batch-size", type=int,
+                        help="Batch size of validation dataset (by default the same as batch size)")
 
     args = parser.parse_args()
 
@@ -195,6 +201,9 @@ def main():
     if "test_files" in arg_dict and not isinstance(arg_dict["test_files"], list):
         arg_dict["test_files"] = [arg_dict["test_files"]]
 
+    if "valid_batch_size" not in arg_dict:
+        arg_dict["valid_batch_size"] = arg_dict["batch_size"]
+
     params = {
         "feature_dim": 2048,
         "dtype": "float32",
@@ -203,7 +212,6 @@ def main():
         "num_hidden_layers": 1,
         "num_heads": 2,
         "max_length": 10,
-        "default_batch_size": 128,
         "filter_size": 1024,
         "layer_postprocess_dropout": 0.1,
         "attention_dropout": 0.1,
@@ -216,6 +224,9 @@ def main():
     start_time = time.time()
 
     task = EncoderTask(params)
+
+    logger = tf.get_logger()
+    logger.setLevel(logging.DEBUG)
 
     if args.mode == "train":
         task.train()
@@ -230,4 +241,5 @@ def main():
     print("Task completed in " + str(elapsed) + " seconds")
 
 
-main()
+if __name__ == "__main__":
+    main()

@@ -84,10 +84,12 @@ class FashionEncoder(tf.keras.Model):
                                                       output_dim=self.params["feature_dim"],
                                                       name="tokens_embedding")
 
-    self.input_dense = tf.keras.layers.Dense(self.params["hidden_size"], activation="relu",
-                                             input_shape=(None, None, self.params["feature_dim"]), name="dense_input")
+    i_dense = tf.keras.layers.Dense(self.params["hidden_size"], activation="relu",
+                                    input_shape=(None, None, self.params["feature_dim"]), name="dense_input")
+    self.input_dense = DenseLayerWrapper(i_dense, params)
     self.encoder_stack = EncoderStack(params)
-    self.output_dense = tf.keras.layers.Dense(self.params["feature_dim"], activation="relu", name="dense_output")
+    o_dense = tf.keras.layers.Dense(self.params["feature_dim"], activation="relu", name="dense_output")
+    self.output_dense = DenseLayerWrapper(o_dense, params)
     self.general_mask_id = tf.constant([0])
 
   def get_config(self):
@@ -122,17 +124,19 @@ class FashionEncoder(tf.keras.Model):
 
     if self.params["masking_mode"] == "single-token":
         mask_tensor = self.tokens_embedding(self.general_mask_id)
+        # Repeat the mask tensor to match the count of masked items
         mask_tensors = tf.repeat(mask_tensor, tf.shape(mask_positions)[0])
+        # Reshape to (number of masked items, feature_dim)
         mask_tensors = tf.reshape(mask_tensors, shape=(-1, self.params["feature_dim"]))
         r = tf.range(0, limit=tf.shape(mask_positions)[0], dtype="int32")
         r = tf.reshape(r, shape=[tf.shape(r)[0], -1, 1])
-        indices = tf.squeeze(tf.concat([r, mask_positions], axis=-1))
-        masked_inputs = tf.tensor_scatter_nd_update(inputs, indices, mask_tensors)
+        indices = tf.squeeze(tf.concat([r, mask_positions], axis=-1), axis=[0])
+        inputs = tf.tensor_scatter_nd_update(inputs, indices, mask_tensors)
 
     # Variance scaling is used here because it seems to work in many problems.
     # Other reasonable initializers may also work just as well.
     with tf.name_scope("Transformer"):
-      encoder_inputs = self.input_dense(masked_inputs)
+      encoder_inputs = self.input_dense(inputs)
       # Calculate attention bias for encoder self-attention and decoder
       # multi-headed attention layers.
       reduced_inputs = tf.equal(encoder_inputs, 0)
@@ -394,6 +398,36 @@ class PrePostProcessingWrapper(tf.keras.layers.Layer):
       y = tf.nn.dropout(y, rate=self.postprocess_dropout)
     return x + y
 
+class DenseLayerWrapper(tf.keras.layers.Layer):
+  """Wrapper class that applies layer pre-processing and post-processing."""
+
+  def __init__(self, layer, params):
+    super(DenseLayerWrapper, self).__init__()
+    self.layer = layer
+    self.params = params
+    self.postprocess_dropout = params["layer_postprocess_dropout"]
+
+  def build(self, input_shape):
+    # Create normalization layer
+    super(DenseLayerWrapper, self).build(input_shape)
+
+  def get_config(self):
+    return {
+        "params": self.params,
+    }
+
+  def call(self, x, *args, **kwargs):
+    """Calls wrapped layer with same parameters."""
+    # Preprocessing: apply layer normalization
+    training = kwargs["training"]
+
+    # Get layer output
+    y = self.layer(x, *args, **kwargs)
+
+    # Postprocessing: apply dropout
+    if training:
+      y = tf.nn.dropout(y, rate=self.postprocess_dropout)
+    return y
 
 class EncoderStack(tf.keras.layers.Layer):
   """Transformer encoder stack.
