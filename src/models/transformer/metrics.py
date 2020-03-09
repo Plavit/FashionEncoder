@@ -7,7 +7,7 @@ def xentropy_loss(y_pred, y_true, categories, mask_positions, acc=None):
     # Compute loss only from mask token
     r = tf.range(0, limit=tf.shape(mask_positions)[0])
     r = tf.reshape(r, shape=[tf.shape(r)[0], -1, 1])
-    indices = tf.squeeze(tf.concat([r, mask_positions], axis=-1), axis=[0])
+    indices = tf.squeeze(tf.concat([r, mask_positions], axis=-1), axis=[1])
     updates = tf.ones(shape=(tf.shape(mask_positions)[0]))
     weights = tf.scatter_nd(indices, updates, tf.shape(categories))
     weights = tf.cast(weights, dtype="float32")

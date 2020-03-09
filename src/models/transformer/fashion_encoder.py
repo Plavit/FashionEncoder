@@ -36,26 +36,82 @@ from official.transformer.v2 import ffn_layer
 
 def create_model(params, is_train):
   """Creates transformer model."""
-
   with tf.name_scope("model"):
-    if is_train:
-        inputs = tf.keras.layers.Input((None, params["feature_dim"]), dtype="float32", name="inputs")
-        categories = tf.keras.layers.Input((None,), dtype="int32", name="categories")
-        mask_positions = tf.keras.layers.Input((None, 1), dtype="int32", name="mask_positions")
-        internal_model = FashionEncoder(params, name="transformer_v2")
-        ret = internal_model([inputs, categories, mask_positions], training=True)
-        internal_model.summary()
-        # outputs, scores = ret["outputs"], ret["scores"]
-        return tf.keras.Model([inputs, categories, mask_positions], [ret])
+    categories = tf.keras.layers.Input((None,), dtype="int32", name="categories")
+    mask_positions = tf.keras.layers.Input((None, 1), dtype="int32", name="mask_positions")
+
+    if params["with_cnn"]:
+        inputs = tf.keras.layers.Input((None, 299, 299, 3), dtype="float32", name="inputs")
+        cnn = CNNExtractor(params, "inception_extractor")
+        encoder_inputs = cnn([inputs, categories, mask_positions])
+        cnn.summary()
     else:
         inputs = tf.keras.layers.Input((None, params["feature_dim"]), dtype="float32", name="inputs")
-        categories = tf.keras.layers.Input((None,), dtype="int32", name="categories")
-        mask_positions = tf.keras.layers.Input((None, 1), dtype="int32", name="mask_positions")
-        internal_model = FashionEncoder(params, name="transformer_v2")
-        ret = internal_model([inputs, categories, mask_positions], training=False)
-        internal_model.summary()
-        # outputs, scores = ret["outputs"], ret["scores"]
-        return tf.keras.Model([inputs, categories, mask_positions], [ret])
+        encoder_inputs = inputs
+
+    internal_model = FashionEncoder(params, name="fashion_encoder")
+
+    if is_train:
+        ret = internal_model([encoder_inputs, categories, mask_positions], training=True)
+    else:
+        ret = internal_model([encoder_inputs, categories, mask_positions], training=False)
+
+    internal_model.summary()
+    return tf.keras.Model([inputs, categories, mask_positions], [ret, encoder_inputs])  # TODO: Change for predict
+
+
+class CNNExtractor(tf.keras.Model):
+
+  def __init__(self, params, name=None):
+    """Initialize layers to build Transformer model.
+
+    Args:
+      params: hyperparameter object defining layer sizes, dropout values, etc.
+      name: name of the model.
+    """
+    super(CNNExtractor, self).__init__(name=name)
+    self.params = params
+    # self.fashion_encoder = FashionEncoder(params, name="fashion_encoder")
+    self.cnn_model = tf.keras.applications.inception_v3.InceptionV3(  # type: tf.keras.models.Model
+            weights='imagenet',
+            include_top=False,
+            pooling='avg')
+    for layer in self.cnn_model.layers[:249]:
+        layer.trainable = False
+    for layer in self.cnn_model.layers[249:]:
+        layer.trainable = True
+
+  def get_config(self):
+    return {
+        "params": self.params,
+    }
+
+  def call(self, inputs):
+      """
+
+      Args:
+          inputs: tuple (inputs, categories, mask_positions)
+            inputs - tensor of shape (batch_size, seq_length, 299, 299, 3)
+          training:
+      """
+      inputs, categories, mask_positions = inputs[0], inputs[1], inputs[2]
+
+      # Compute padding mask
+      unpacked_categories = tf.reshape(categories, shape=[-1])
+      unpacked_length = tf.shape(unpacked_categories)[0]
+      padding_mask = tf.equal(unpacked_categories, 0)
+      padding_mask = tf.math.logical_not(padding_mask)
+      padding_mask = tf.cast(padding_mask, dtype="float32")
+      mask_matrix = tf.zeros(shape=(unpacked_length, unpacked_length))
+      mask_matrix = tf.linalg.set_diag(mask_matrix, padding_mask)
+
+      batch_size = tf.shape(inputs)[0]
+      seq_length = tf.shape(inputs)[1]
+
+      inputs = tf.reshape(inputs, shape=(-1, 299, 299, 3))
+      cnn_outputs = self.cnn_model(inputs)
+      cnn_outputs = tf.einsum("ij,jk->ik", mask_matrix, cnn_outputs)
+      return tf.reshape(cnn_outputs, shape=(batch_size, seq_length, self.params["feature_dim"]))
 
 
 class FashionEncoder(tf.keras.Model):
@@ -130,7 +186,8 @@ class FashionEncoder(tf.keras.Model):
         mask_tensors = tf.reshape(mask_tensors, shape=(-1, self.params["feature_dim"]))
         r = tf.range(0, limit=tf.shape(mask_positions)[0], dtype="int32")
         r = tf.reshape(r, shape=[tf.shape(r)[0], -1, 1])
-        indices = tf.squeeze(tf.concat([r, mask_positions], axis=-1), axis=[0])
+        indices = tf.concat([r, mask_positions], axis=-1)
+        indices = tf.squeeze(indices, axis=[1])
         inputs = tf.tensor_scatter_nd_update(inputs, indices, mask_tensors)
 
     # Variance scaling is used here because it seems to work in many problems.
@@ -189,179 +246,6 @@ class FashionEncoder(tf.keras.Model):
       return self.encoder_stack(
           encoder_inputs, attention_bias, inputs_padding, training=training)
 
-  def predict_2(self, encoder_outputs, attention_bias, training):
-    """Generate logits for each value in the target sequence.
-
-    Args:
-      encoder_outputs: continuous representation of input sequence. float tensor
-        with shape [batch_size, input_length, hidden_size]
-      attention_bias: float tensor with shape [batch_size, 1, 1, input_length]
-      training: boolean, whether in training mode or not.
-
-    Returns:
-      float32 tensor with shape [batch_size, target_length, vocab_size]
-    """
-    decoder_inputs = tf.zeros((25, 8, self.params["hidden_size"]))
-    with tf.name_scope("decode"):
-      # Prepare inputs to decoder layers by shifting targets, adding positional
-      # encoding and applying dropout.
-      decoder_inputs = tf.cast(decoder_inputs, self.params["dtype"])
-      attention_bias = tf.cast(attention_bias, self.params["dtype"])
-      # with tf.name_scope("shift_targets"):
-      #   # Shift targets to the right, and remove the last element
-      #   decoder_inputs = tf.pad(decoder_inputs,
-      #                           [[0, 0], [1, 0], [0, 0]])[:, :-1, :]
-
-      # with tf.name_scope("add_pos_encoding"):
-      #   length = tf.shape(decoder_inputs)[1]
-      #   pos_encoding = model_utils.get_position_encoding(
-      #       length, self.params["hidden_size"])
-      #   pos_encoding = tf.cast(pos_encoding, self.params["dtype"])
-      #   decoder_inputs += pos_encoding
-      # TODO: Add positional encoding
-
-      length = tf.shape(decoder_inputs)[1]
-
-      if training:
-        decoder_inputs = tf.nn.dropout(
-            decoder_inputs, rate=self.params["layer_postprocess_dropout"])
-
-      # Run values
-      decoder_self_attention_bias = model_utils.get_decoder_self_attention_bias(
-          length, dtype=self.params["dtype"])
-
-      outputs = self.decoder_stack(
-          decoder_inputs,
-          encoder_outputs,
-          decoder_self_attention_bias,
-          attention_bias,
-          training=training)
-
-      return outputs
-
-  def _get_symbols_to_logits_fn(self, max_decode_length, training):
-    """Returns a decoding function that calculates logits of the next tokens."""
-
-    timing_signal = model_utils.get_position_encoding(
-        max_decode_length + 1, self.params["hidden_size"])
-    timing_signal = tf.cast(timing_signal, self.params["dtype"])
-    decoder_self_attention_bias = model_utils.get_decoder_self_attention_bias(
-        max_decode_length, dtype=self.params["dtype"])
-
-    # TODO(b/139770046): Refactor code with better naming of i.
-    def symbols_to_logits_fn(ids, i, cache):
-      """Generate logits for next potential IDs.
-
-      Args:
-        ids: Current decoded sequences. int tensor with shape [batch_size *
-          beam_size, i + 1].
-        i: Loop index.
-        cache: dictionary of values storing the encoder output, encoder-decoder
-          attention bias, and previous decoder attention values.
-
-      Returns:
-        Tuple of
-          (logits with shape [batch_size * beam_size, vocab_size],
-           updated cache values)
-      """
-      # Set decoder input to the last generated IDs
-      decoder_input = ids[:, -1:]
-
-      # Preprocess decoder input by getting embeddings and adding timing signal.
-      decoder_input = self.embedding_softmax_layer(decoder_input)
-
-      if self.params["padded_decode"]:
-        timing_signal_shape = timing_signal.shape.as_list()
-        decoder_input += tf.slice(timing_signal, [i, 0],
-                                  [1, timing_signal_shape[1]])
-
-        bias_shape = decoder_self_attention_bias.shape.as_list()
-        self_attention_bias = tf.slice(
-            decoder_self_attention_bias, [0, 0, i, 0],
-            [bias_shape[0], bias_shape[1], 1, bias_shape[3]])
-      else:
-        decoder_input += timing_signal[i:i + 1]
-
-        self_attention_bias = decoder_self_attention_bias[:, :, i:i + 1, :i + 1]
-
-      decoder_outputs = self.decoder_stack(
-          decoder_input,
-          cache.get("encoder_outputs"),
-          self_attention_bias,
-          cache.get("encoder_decoder_attention_bias"),
-          training=training,
-          cache=cache,
-          decode_loop_step=i if self.params["padded_decode"] else None)
-      logits = self.embedding_softmax_layer(decoder_outputs, mode="linear")
-      logits = tf.squeeze(logits, axis=[1])
-      return logits, cache
-
-    return symbols_to_logits_fn
-
-  def predict(self, encoder_outputs, encoder_decoder_attention_bias, training):
-    """Return predicted sequence."""
-    encoder_outputs = tf.cast(encoder_outputs, self.params["dtype"])
-    if self.params["padded_decode"]:
-      batch_size = encoder_outputs.shape.as_list()[0]
-      input_length = encoder_outputs.shape.as_list()[1]
-    else:
-      batch_size = tf.shape(encoder_outputs)[0]
-      input_length = tf.shape(encoder_outputs)[1]
-    max_decode_length = input_length + self.params["extra_decode_length"]
-    encoder_decoder_attention_bias = tf.cast(encoder_decoder_attention_bias,
-                                             self.params["dtype"])
-
-    symbols_to_logits_fn = self._get_symbols_to_logits_fn(
-        max_decode_length, training)
-
-    # Create initial set of IDs that will be passed into symbols_to_logits_fn.
-    initial_ids = tf.zeros([batch_size], dtype=tf.int32)
-
-    # Create cache storing decoder attention values for each layer.
-    # pylint: disable=g-complex-comprehension
-    init_decode_length = (
-        max_decode_length if self.params["padded_decode"] else 0)
-    num_heads = self.params["num_heads"]
-    dim_per_head = self.params["hidden_size"] // num_heads
-    cache = {
-        "layer_%d" % layer: {
-            "k":
-                tf.zeros([
-                    batch_size, init_decode_length, num_heads, dim_per_head
-                ],
-                         dtype=self.params["dtype"]),
-            "v":
-                tf.zeros([
-                    batch_size, init_decode_length, num_heads, dim_per_head
-                ],
-                         dtype=self.params["dtype"])
-        } for layer in range(self.params["num_hidden_layers"])
-    }
-    # pylint: enable=g-complex-comprehension
-
-    # Add encoder output and attention bias to the cache.
-    cache["encoder_outputs"] = encoder_outputs
-    cache["encoder_decoder_attention_bias"] = encoder_decoder_attention_bias
-
-    # Use beam search to find the top beam_size sequences and scores.
-    decoded_ids, scores = beam_search.sequence_beam_search(
-        symbols_to_logits_fn=symbols_to_logits_fn,
-        initial_ids=initial_ids,
-        initial_cache=cache,
-        vocab_size=self.params["vocab_size"],
-        beam_size=self.params["beam_size"],
-        alpha=self.params["alpha"],
-        max_decode_length=max_decode_length,
-        eos_id=EOS_ID,
-        padded_decode=self.params["padded_decode"],
-        dtype=self.params["dtype"])
-
-    # Get the top sequence for each batch element
-    top_decoded_ids = decoded_ids[:, 0, 1:]
-    top_scores = scores[:, 0]
-
-    return {"outputs": top_decoded_ids, "scores": top_scores}
-
 
 class PrePostProcessingWrapper(tf.keras.layers.Layer):
   """Wrapper class that applies layer pre-processing and post-processing."""
@@ -398,6 +282,7 @@ class PrePostProcessingWrapper(tf.keras.layers.Layer):
       y = tf.nn.dropout(y, rate=self.postprocess_dropout)
     return x + y
 
+
 class DenseLayerWrapper(tf.keras.layers.Layer):
   """Wrapper class that applies layer pre-processing and post-processing."""
 
@@ -428,6 +313,7 @@ class DenseLayerWrapper(tf.keras.layers.Layer):
     if training:
       y = tf.nn.dropout(y, rate=self.postprocess_dropout)
     return y
+
 
 class EncoderStack(tf.keras.layers.Layer):
   """Transformer encoder stack.

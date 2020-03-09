@@ -30,12 +30,16 @@ def parse_example_with_images(raw):
         })
 
     decoded_images = []
-    raw_imgs = tf.unstack(example[1]["images"])
-    for raw_img in raw_imgs:
-        img_tensor = decode_img(raw_img)
-        decoded_images.append(tf.keras.applications.inception_v3.preprocess_input(img_tensor))
+    raw_imgs = example[1]["images"]
+    seq_length = tf.shape(example[1]["categories"])[0]
+    img_array = tf.TensorArray(dtype=tf.float32, size=seq_length)
+    idx = 0
+    for img in raw_imgs:
+        img_tensor = decode_img(img)
+        img_array.write(idx, tf.keras.applications.inception_v3.preprocess_input(img_tensor))
+        idx += 1
 
-    return tf.stack(decoded_images), example[1]["categories"]
+    return img_array.stack(), example[1]["categories"]
 
 
 def get_dataset(filenames, with_features):
@@ -60,7 +64,12 @@ def add_special_token_positions(features, categories):
 def get_training_dataset(filenames, batch_size, with_features):
     outfits = get_dataset(filenames, with_features)
     outfits = outfits.map(add_special_token_positions, tf.data.experimental.AUTOTUNE)
-    outfits = outfits.padded_batch(batch_size, ([None, 2048], [None], [None, 1]), drop_remainder=True)
+
+    if with_features:
+        outfits = outfits.padded_batch(batch_size, ([None, 2048], [None], [None, 1]), drop_remainder=True)
+    else:
+        outfits = outfits.padded_batch(batch_size, ([None, 299, 299, 3], [None], [None, 1]), drop_remainder=True)
+
     return outfits.map(append_targets, tf.data.experimental.AUTOTUNE)\
         .cache()\
         .prefetch(tf.data.experimental.AUTOTUNE)
