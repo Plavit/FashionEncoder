@@ -15,6 +15,12 @@ class EncoderTask:
         self.params = params
 
     @staticmethod
+    def fitb(model, dataset_path, with_features):
+        dataset = input_pipeline.get_fitb([dataset_path], with_features)
+
+
+
+    @staticmethod
     def _grad(model: tf.keras.Model, inputs, targets, acc=None, num_replicas=1):
         with tf.GradientTape() as tape:
             ret = model([inputs[0], inputs[1], inputs[2]], training=True)
@@ -109,76 +115,6 @@ class EncoderTask:
         print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path))
         print("Trained on " + str(batch_number) + " batches in total.")
 
-    # def train_multi(self):
-    #
-    #     print(self.params, flush=True)
-    #
-    #     strategy = tf.distribute.MirroredStrategy()
-    #
-    #     print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
-    #
-    #     train_dataset = input_pipeline.get_training_dataset(self.params["dataset_files"], self.params["batch_size"])
-    #     train_dataset = strategy.experimental_distribute_dataset(train_dataset)
-    #     num_epochs = self.params["epoch_count"]
-    #
-    #     with strategy.scope():
-    #         optimizer = tf.optimizers.Adam()
-    #         model = fashion_enc.create_model(self.params, True)
-    #         model.summary()
-    #
-    #         current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    #         train_log_dir = 'logs/' + current_time + '/train'
-    #         train_summary_writer = tf.summary.create_file_writer(train_log_dir)
-    #
-    #         @tf.function
-    #         def train_step(x, y):
-    #             loss_value, grads = self._grad(model, x, y, strategy.num_replicas_in_sync)
-    #             optimizer.apply_gradients(zip(grads, model.trainable_variables))
-    #             ckpt.step.assign_add(1)
-    #             # Track progress
-    #             epoch_loss_avg(loss_value)  # Add current batch loss
-    #             train_loss(loss_value)
-    #
-    #         @tf.function
-    #         def distributed_train_step(x, y):
-    #             per_replica_losses = strategy.experimental_run_v2(train_step, args=(x, y))
-    #             return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_losses, axis=None)
-    #
-    #         batch_number = 1
-    #         ckpt = tf.train.Checkpoint(step=tf.Variable(1), optimizer=optimizer, model=model)
-    #
-    #         if "checkpoint_dir" in self.params:
-    #             manager = tf.train.CheckpointManager(ckpt, self.params["checkpoint_dir"], max_to_keep=3)
-    #         else:
-    #             manager = tf.train.CheckpointManager(ckpt, "./logs/" + current_time + "/tf_ckpts", max_to_keep=3)
-    #
-    #         if manager.latest_checkpoint:
-    #             print("Restored from {}".format(manager.latest_checkpoint), flush=True)
-    #         else:
-    #             print("Initializing from scratch.", flush=True)
-    #
-    #         for epoch in range(num_epochs):
-    #             epoch_loss_avg = tf.keras.metrics.Mean('epoch_loss')
-    #             train_loss = tf.keras.metrics.Mean('train_loss', dtype=tf.float32)
-    #             # Training loop
-    #             for x, y in train_dataset:
-    #                 distributed_train_step(x, y)
-    #                 with train_summary_writer.as_default():
-    #                     tf.summary.scalar('loss', train_loss.result(), step=batch_number)
-    #                 batch_number = batch_number + 1
-    #
-    #             with train_summary_writer.as_default():
-    #                 tf.summary.scalar('epoch_loss', epoch_loss_avg.result(), step=epoch)
-    #
-    #             if epoch % 1 == 0:
-    #                 print("Epoch {:03d}: Loss: {:.3f}".format(epoch, epoch_loss_avg.result()))
-    #                 save_path = manager.save()
-    #                 print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path))
-    #
-    #         save_path = manager.save()
-    #         print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path))
-    #         print("Trained on " + str(batch_number) + " batches in total.")
-
 
 def main():
     parser = argparse.ArgumentParser()
@@ -239,8 +175,6 @@ def main():
 
     if args.mode == "train":
         task.train()
-    elif args.mode == "train_multi":
-        task.train_multi()
     else:
         print("Invalid mode")
 
