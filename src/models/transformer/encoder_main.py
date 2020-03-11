@@ -13,7 +13,6 @@ class EncoderTask:
 
     def __init__(self, params):
         self.params = params
-        self.model = fashion_enc.create_model(params, True)
 
     @staticmethod
     def _grad(model: tf.keras.Model, inputs, targets, acc=None, num_replicas=1):
@@ -21,13 +20,14 @@ class EncoderTask:
             ret = model([inputs[0], inputs[1], inputs[2]], training=True)
             outputs = ret[0]
             targets = ret[1]
-            loss_value = metrics.xentropy_loss(outputs, targets, inputs[1], inputs[2], acc) / num_replicas  # TODO: Gradient Stop?
+            loss_value = metrics.xentropy_loss(outputs, tf.stop_gradient(targets), inputs[1], inputs[2], acc) / num_replicas  # TODO: Gradient Stop?
         return loss_value, tape.gradient(loss_value, model.trainable_variables)
 
     def train(self):
 
         print(self.params, flush=True)
 
+        # Prepare datasets
         train_dataset = input_pipeline.get_training_dataset(self.params["dataset_files"], self.params["batch_size"]
                                                             , not self.params["with_cnn"])
         test_dataset = input_pipeline.get_training_dataset(self.params["test_files"], self.params["valid_batch_size"]
@@ -35,9 +35,11 @@ class EncoderTask:
         num_epochs = self.params["epoch_count"]
         optimizer = tf.optimizers.Adam(self.params["learning_rate"])
 
+        # Create the model
         model = fashion_enc.create_model(self.params, True)
         model.summary()
 
+        # Prepare logging
         current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         train_log_dir = 'logs/' + current_time + '/train'
         train_summary_writer = tf.summary.create_file_writer(train_log_dir)
@@ -89,17 +91,19 @@ class EncoderTask:
                 valid_acc = tf.metrics.CategoricalAccuracy()
                 for x, y in test_dataset:
                     # Optimize the model
-                    loss_value = metrics.xentropy_loss(model([x[0], x[1], x[2]], training=True), tf.stop_gradient(y),
-                                                       x[1], x[2], valid_acc)
+                    ret = model([x[0], x[1], x[2]], training=False)
+                    outputs = ret[0]
+                    targets = ret[1]
+                    loss_value = metrics.xentropy_loss(outputs, targets, x[1], x[2], valid_acc)
                     # Track
                     valid_loss(loss_value)
 
                 with train_summary_writer.as_default():
                     tf.summary.scalar('valid_loss', valid_loss.result(), step=epoch)
                     tf.summary.scalar('valid_acc', valid_acc.result(), step=epoch)
-                print("Epoch {:03d}: Valid loss: {:.3f}, Valid Acc: {:.3f}".format(epoch, valid_loss.result(), valid_acc.result()))
+                print("Epoch {:03d}: Valid loss: {:.3f}, Valid Acc: {:.3f}".format(epoch, valid_loss.result(), valid_acc.result()), flush=True)
                 save_path = manager.save()
-                print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path))
+                print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path), flush=True)
 
         save_path = manager.save()
         print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path))
@@ -231,7 +235,7 @@ def main():
     task = EncoderTask(params)
 
     logger = tf.get_logger()
-    logger.setLevel(logging.DEBUG)
+    # logger.setLevel(logging.DEBUG)
 
     if args.mode == "train":
         task.train()

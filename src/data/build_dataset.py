@@ -91,7 +91,7 @@ def process_dataset(dataset_root, dataset_filename, with_features: bool = False)
         if with_features:
             model = tf.keras.applications.inception_v3.InceptionV3(weights="imagenet", include_top=False, pooling="avg")
 
-        for outfit in raw_json[:5]:
+        for outfit in raw_json[:64]:
             set_id = int(outfit["set_id"])
             images = []
             categories = []

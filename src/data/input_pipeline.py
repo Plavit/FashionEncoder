@@ -16,10 +16,7 @@ def parse_example_with_features(raw):
 def decode_img(img):
     # convert the compressed string to a 3D uint8 tensor
     img = tf.image.decode_jpeg(img, channels=3)
-    # Use `convert_image_dtype` to convert to floats in the [0,1] range.
-    # img = tf.image.convert_image_dtype(img, tf.float32)
-    # resize the image to the desired size.
-    return tf.image.resize(img, [299, 299])
+    return tf.keras.applications.inception_v3.preprocess_input(tf.image.resize(img, [299, 299]))
 
 
 def parse_example_with_images(raw):
@@ -29,17 +26,9 @@ def parse_example_with_images(raw):
             "images": tf.io.FixedLenSequenceFeature([], tf.string)
         })
 
-    decoded_images = []
     raw_imgs = example[1]["images"]
-    seq_length = tf.shape(example[1]["categories"])[0]
-    img_array = tf.TensorArray(dtype=tf.float32, size=seq_length)
-    idx = 0
-    for img in raw_imgs:
-        img_tensor = decode_img(img)
-        img_array.write(idx, tf.keras.applications.inception_v3.preprocess_input(img_tensor))
-        idx += 1
-
-    return img_array.stack(), example[1]["categories"]
+    images = tf.map_fn(decode_img, raw_imgs, dtype=tf.float32)
+    return images, example[1]["categories"]
 
 
 def get_dataset(filenames, with_features):
@@ -62,7 +51,7 @@ def add_special_token_positions(features, categories):
 
 
 def get_training_dataset(filenames, batch_size, with_features):
-    outfits = get_dataset(filenames, with_features)
+    outfits = get_dataset(filenames, with_features).cache()
     outfits = outfits.map(add_special_token_positions, tf.data.experimental.AUTOTUNE)
 
     if with_features:
@@ -70,6 +59,6 @@ def get_training_dataset(filenames, batch_size, with_features):
     else:
         outfits = outfits.padded_batch(batch_size, ([None, 299, 299, 3], [None], [None, 1]), drop_remainder=True)
 
-    return outfits.map(append_targets, tf.data.experimental.AUTOTUNE)\
-        .cache()\
+    return outfits\
+        .map(append_targets, tf.data.experimental.AUTOTUNE)\
         .prefetch(tf.data.experimental.AUTOTUNE)

@@ -94,8 +94,10 @@ class CNNExtractor(tf.keras.Model):
             inputs - tensor of shape (batch_size, seq_length, 299, 299, 3)
           training:
       """
-      inputs, categories, mask_positions = inputs[0], inputs[1], inputs[2]
+      logger = tf.get_logger()
 
+      inputs, categories, mask_positions = inputs[0], inputs[1], inputs[2]
+      logger.debug(inputs)
       # Compute padding mask
       unpacked_categories = tf.reshape(categories, shape=[-1])
       unpacked_length = tf.shape(unpacked_categories)[0]
@@ -111,6 +113,8 @@ class CNNExtractor(tf.keras.Model):
       inputs = tf.reshape(inputs, shape=(-1, 299, 299, 3))
       cnn_outputs = self.cnn_model(inputs)
       cnn_outputs = tf.einsum("ij,jk->ik", mask_matrix, cnn_outputs)
+      logger.debug(cnn_outputs)
+      logger.debug(cnn_outputs)
       return tf.reshape(cnn_outputs, shape=(batch_size, seq_length, self.params["feature_dim"]))
 
 

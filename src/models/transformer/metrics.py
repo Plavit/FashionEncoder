@@ -15,7 +15,7 @@ def xentropy_loss(y_pred, y_true, categories, mask_positions, acc=None):
     weights_sum = tf.reduce_sum(weights)
 
     logger = tf.get_logger()
-    # print(weights, flush=True)
+    logger.debug(weights)
 
     # Reshape to batch (size * seq length, feature dim)
     pred_batch = tf.reshape(y_pred, [-1, feature_dim])
@@ -24,7 +24,7 @@ def xentropy_loss(y_pred, y_true, categories, mask_positions, acc=None):
 
     # Dot product of every prediction with all labels
     logits = tf.matmul(pred_batch, true_batch, transpose_b=True)
-    # print(logits, flush=True)
+    logger.debug(logits)
 
     # One-hot labels (the indentity matrix)
     labels = tf.eye(item_count, item_count)
@@ -40,9 +40,9 @@ def xentropy_loss(y_pred, y_true, categories, mask_positions, acc=None):
         acc(labels, logits, sample_weight=weights)
 
     cross_entropy = tf.nn.softmax_cross_entropy_with_logits(labels=labels, logits=logits)
-    # print(cross_entropy, flush=True)
+    logger.debug(cross_entropy)
     cross_entropy = tf.tensordot(cross_entropy, weights, 1)
-    # print(cross_entropy, flush=True)
+    logger.debug(cross_entropy)
     return tf.reduce_sum(cross_entropy) / weights_sum
 
 
