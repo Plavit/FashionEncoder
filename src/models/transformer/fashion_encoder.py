@@ -152,6 +152,10 @@ class FashionEncoder(tf.keras.Model):
     self.output_dense = DenseLayerWrapper(o_dense, params)
     self.general_mask_id = tf.constant([0])
 
+    if params["category_embedding"]:
+        self.category_embedding = tf.keras.layers.Embedding(params["categories_count"], output_dim=self.params["feature_dim"])
+
+
   def get_config(self):
     return {
         "params": self.params,
@@ -193,6 +197,27 @@ class FashionEncoder(tf.keras.Model):
         indices = tf.concat([r, mask_positions], axis=-1)
         indices = tf.squeeze(indices, axis=[1])
         inputs = tf.tensor_scatter_nd_update(inputs, indices, mask_tensors)
+
+    if self.params["category_embedding"]:
+        flat_categories = tf.reshape(categories, shape=(-1, 1))
+
+        # Compute padding mask # TODO: Make function out of this
+        unpacked_categories = tf.reshape(categories, shape=[-1])
+        unpacked_length = tf.shape(unpacked_categories)[0]
+        padding_mask = tf.equal(unpacked_categories, 0)
+        padding_mask = tf.math.logical_not(padding_mask)
+        padding_mask = tf.cast(padding_mask, dtype="float32")
+        mask_matrix = tf.zeros(shape=(unpacked_length, unpacked_length))
+        mask_matrix = tf.linalg.set_diag(mask_matrix, padding_mask)
+
+        batch_size = tf.shape(inputs)[0]
+        seq_length = tf.shape(inputs)[1]
+
+        embedded_categories = self.category_embedding(flat_categories)
+        embedded_categories = tf.einsum("ij,jk->ik", mask_matrix, embedded_categories)
+        embedded_categories = tf.reshape(embedded_categories, shape=(batch_size, seq_length, self.params["feature_dim"]))
+        inputs = tf.keras.layers.add([inputs, embedded_categories])
+
 
     # Variance scaling is used here because it seems to work in many problems.
     # Other reasonable initializers may also work just as well.

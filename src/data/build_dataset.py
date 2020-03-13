@@ -15,6 +15,7 @@ def main():
     parser.add_argument("--tfrecord-template", type=str, help="Template for .tfrecord file names", required=True)
     parser.add_argument("--shard-count", type=int, help="Number of .tfrecord files", required=True)
     parser.add_argument("--with-features", help="With CNN features extracted", action='store_true')
+    parser.add_argument("--model-path", type=str, help="Path saved model to use for feature extraction. (if not specified use InceptionV3)")
 
     args = parser.parse_args()
 
@@ -23,6 +24,7 @@ def main():
     output_template = args.tfrecord_template
     shard_count = args.shard_count
     with_features = args.with_features
+    model_path = args.model_path
 
     print("Arguments parsed", flush=True)
 
@@ -78,7 +80,7 @@ def extract_features(model: tf.keras.Model, path):
     return np.reshape(model.predict(img_array), 2048)
 
 
-def process_dataset(dataset_root, dataset_filename, with_features: bool = False):
+def process_dataset(dataset_root, dataset_filename, with_features: bool = False, model_path=None):
     excluded_categories = [77, 76, 78, 113, 115, 116, 118, 120, 122, 123, 124, 126, 127, 129, 130, 132, 135, 136, 139, 140, 141, 143, 144, 4241, 4242, 147, 4244, 150, 4247, 4248, 153, 156, 154, 155, 157, 4254, 159, 160, 4257, 162, 163, 164, 166, 167, 168, 169, 170, 4267, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182, 231, 311, 313, 314, 316, 317, 321, 4432, 4433, 4437, 4439, 4440, 4441, 4442, 4443, 4445, 4446, 4448, 4449, 4450, 4451, 4478, 4480, 4481, 4482, 4483, 4484, 4485, 4486, 4487, 4488, 4489, 4490, 4492, 4493, 4499, 4500, 4501, 4502, 4503, 4504, 4505, 4506, 4507, 4508, 4509, 4510, 4511, 4512, 4513, 4512, 4438, 4240, 146, 148, 4246, 151, 152, 949, 161, 4258, 171, 4269, 4276, 3336, 1967, 4431, 5535, 4436, 4430,
                 93, 94, 95, 96, 97, 98, 99, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 4292, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 211, 213, 214, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 319, 320, 333, 334, 335, 338, 339, 340, 196, 336, 337]
     total_disposed = 0
@@ -89,7 +91,10 @@ def process_dataset(dataset_root, dataset_filename, with_features: bool = False)
         examples = []
 
         if with_features:
-            model = tf.keras.applications.inception_v3.InceptionV3(weights="imagenet", include_top=False, pooling="avg")
+            if model_path is not None:
+                model = tf.keras.models.load_model(model_path)
+            else:
+                model = tf.keras.applications.inception_v3.InceptionV3(weights="imagenet", include_top=False, pooling="avg")
 
         for outfit in raw_json:
             set_id = int(outfit["set_id"])

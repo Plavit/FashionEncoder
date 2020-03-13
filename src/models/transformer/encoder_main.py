@@ -26,7 +26,7 @@ class EncoderTask:
             ret = model([inputs[0], inputs[1], inputs[2]], training=True)
             outputs = ret[0]
             targets = ret[1]
-            loss_value = metrics.xentropy_loss(outputs, tf.stop_gradient(targets), inputs[1], inputs[2], acc) / num_replicas  # TODO: Gradient Stop?
+            loss_value = metrics.xentropy_loss(outputs, targets, inputs[1], inputs[2], acc) / num_replicas  # TODO: Gradient Stop?
         return loss_value, tape.gradient(loss_value, model.trainable_variables)
 
     def train(self):
@@ -133,6 +133,8 @@ def main():
     parser.add_argument("--valid-batch-size", type=int,
                         help="Batch size of validation dataset (by default the same as batch size)")
     parser.add_argument("--with-cnn", help="Optimizer's learning rate", action='store_true')
+    parser.add_argument("--category_embedding", help="Add learned category embedding to image feature vectors", action='store_true')
+    parser.add_argument("--categories-count", type=int, help="Add learned category embedding to image feature vectors")
 
     args = parser.parse_args()
 
