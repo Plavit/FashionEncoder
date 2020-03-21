@@ -14,23 +14,34 @@ class EncoderTask:
     def __init__(self, params):
         self.params = params
 
+    def fitb(self, model, dataset, epoch):
+        acc = tf.metrics.CategoricalAccuracy()
+        mask = tf.constant([[[0]]])
+        empty_mask = tf.constant([[[]]], dtype="int32")
+        cnn = model.get_layer("cnn_extractor")
+        for task in dataset:
+            inputs, input_categories, targets, target_categories, target_position = task
+            if self.params["with_cnn"]:
+                targets = cnn([targets, target_categories, empty_mask])
+            res = model([inputs, input_categories, mask], training=False)
+            outputs = res[0]
+            metrics.fitb_acc(outputs, targets, mask, target_position, input_categories, acc)
+        tf.summary.scalar('fitb_acc', acc.result(), step=epoch)
+        print("Epoch {:03d}: FITB Acc: {:.3f}".format(epoch, acc.result()), flush=True)
+
     @staticmethod
-    def fitb(model, dataset_path, with_features):
-        dataset = input_pipeline.get_fitb([dataset_path], with_features)
-
-
-
-    @staticmethod
-    def _grad(model: tf.keras.Model, inputs, targets, acc=None, num_replicas=1):
+    def _grad(model: tf.keras.Model, inputs, targets, acc=None, num_replicas=1, stop_targets_gradient=True):
         with tf.GradientTape() as tape:
             ret = model([inputs[0], inputs[1], inputs[2]], training=True)
             outputs = ret[0]
             targets = ret[1]
-            loss_value = metrics.xentropy_loss(outputs, targets, inputs[1], inputs[2], acc) / num_replicas  # TODO: Gradient Stop?
+            if stop_targets_gradient:
+                loss_value = metrics.xentropy_loss(outputs, tf.stop_gradient(targets), inputs[1], inputs[2], acc) / num_replicas
+            else:
+                loss_value = metrics.xentropy_loss(outputs, targets, inputs[1], inputs[2], acc) / num_replicas
         return loss_value, tape.gradient(loss_value, model.trainable_variables)
 
     def train(self):
-
         print(self.params, flush=True)
 
         # Prepare datasets
@@ -38,6 +49,8 @@ class EncoderTask:
                                                             , not self.params["with_cnn"])
         test_dataset = input_pipeline.get_training_dataset(self.params["test_files"], self.params["valid_batch_size"]
                                                            , not self.params["with_cnn"])
+        fitb_dataset = input_pipeline.get_fitb_dataset([self.params["fitb_file"]], not self.params["with_cnn"]).batch(1)\
+
         num_epochs = self.params["epoch_count"]
         optimizer = tf.optimizers.Adam(self.params["learning_rate"])
 
@@ -53,6 +66,8 @@ class EncoderTask:
 
         ckpt = tf.train.Checkpoint(step=tf.Variable(1), optimizer=optimizer, model=model)
 
+        max_valid = 0
+
         if "checkpoint_dir" in self.params:
             manager = tf.train.CheckpointManager(ckpt, self.params["checkpoint_dir"], max_to_keep=3)
         else:
@@ -62,7 +77,7 @@ class EncoderTask:
             print("Restored from {}".format(manager.latest_checkpoint), flush=True)
         else:
             print("Initializing from scratch.", flush=True)
-
+        self.fitb(model, fitb_dataset, 1)
         for epoch in range(1, num_epochs + 1):
             epoch_loss_avg = tf.keras.metrics.Mean('epoch_loss')
             train_loss = tf.keras.metrics.Mean('train_loss', dtype=tf.float32)
@@ -72,7 +87,11 @@ class EncoderTask:
                 batch_number = batch_number + 1
 
                 # Optimize the model
-                loss_value, grads = self._grad(model, x, y, categorical_acc)
+                if max_valid < 30:
+                    loss_value, grads = self._grad(model, x, y, categorical_acc)
+                else:
+                    loss_value, grads = self._grad(model, x, y, categorical_acc, stop_targets_gradient=False)
+
                 optimizer.apply_gradients(zip(grads, model.trainable_variables))
 
                 ckpt.step.assign_add(1)
@@ -91,7 +110,9 @@ class EncoderTask:
 
             print("Epoch {:03d}: Loss: {:.3f}, Acc: {:.3f}".format(epoch, epoch_loss_avg.result(),
                                                                    categorical_acc.result()))
+
             if epoch % 5 == 0:
+                self.fitb(model, fitb_dataset, epoch)
                 # Validation loop
                 valid_loss = tf.keras.metrics.Mean('valid_loss', dtype=tf.float32)
                 valid_acc = tf.metrics.CategoricalAccuracy()
@@ -109,6 +130,10 @@ class EncoderTask:
                     tf.summary.scalar('valid_acc', valid_acc.result(), step=epoch)
                 print("Epoch {:03d}: Valid loss: {:.3f}, Valid Acc: {:.3f}".format(epoch, valid_loss.result(), valid_acc.result()), flush=True)
                 save_path = manager.save()
+
+                if valid_acc.result() > max_valid:
+                    max_valid = valid_acc.result()
+
                 print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path), flush=True)
 
         save_path = manager.save()
@@ -120,6 +145,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset-files", type=str, nargs="+", help="Paths to dataset files")
     parser.add_argument("--test-files", type=str, nargs="+", help="Paths to test dataset files")
+    parser.add_argument("--fitb-file", type=str,  help="Path to FITB dataset files")
     parser.add_argument("--batch-size", type=int, help="Batch size")
     parser.add_argument("--filter-size", type=int, help="Transformer filter size")
     parser.add_argument("--epoch-count", type=int, help="Number of epochs")

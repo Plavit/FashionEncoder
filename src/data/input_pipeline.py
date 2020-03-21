@@ -90,14 +90,38 @@ def parse_fitb_with_images(raw):
         }, context_features={
             "target_position": tf.io.FixedLenFeature([], dtype=tf.int64)
         })
-    return example[1]["inputs"], example[1]["input_categories"], \
-           example[1]["targets"], example[1]["target_categories"], \
+
+    inputs = example[1]["inputs"]
+    inputs = tf.map_fn(decode_img, inputs, dtype=tf.float32)
+
+    targets = example[1]["targets"]
+    targets = tf.map_fn(decode_img, targets, dtype=tf.float32)
+
+    return inputs, example[1]["input_categories"], \
+           targets, example[1]["target_categories"], \
            example[0]["target_position"]
 
 
-def get_fitb(filenames, with_features):
+def add_mask_mock(inputs, input_categories, targets, target_categories, target_position):
+    """
+    Adds mock tensor to inputs at the 0th index
+    Adds category -1 to input_categories tensor at the 0th index
+    Returns:
+        Example ready for FITB task
+    """
+    masked_input = tf.ones_like(inputs[0])
+    masked_input = tf.expand_dims(masked_input, axis=0)
+    inputs = tf.concat([masked_input, inputs], axis=0)
+    masked_category = tf.constant([-1], dtype=tf.int64)
+    input_categories = tf.concat([masked_category, input_categories], axis=0)
+
+    return inputs, input_categories, targets, target_categories, target_position
+
+
+def get_fitb_dataset(filenames, with_features):
     raw_dataset = tf.data.TFRecordDataset(filenames)
     if with_features:
-        return raw_dataset.map(parse_fitb_with_features)
+        dataset = raw_dataset.map(parse_fitb_with_features)
     else:
-        return raw_dataset.map(parse_fitb_with_images)
+        dataset = raw_dataset.map(parse_fitb_with_images)
+    return dataset.map(add_mask_mock)
