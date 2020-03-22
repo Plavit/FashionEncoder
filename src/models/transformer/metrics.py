@@ -50,7 +50,6 @@ def fitb_acc(y_pred, y_true, pred_positions, target_position, categories, acc: t
     weights = tf.scatter_nd(indices, updates, tf.shape(categories))
     weights = tf.cast(weights, dtype="float32")
     weights = tf.reshape(weights, [-1])
-    weights_sum = tf.reduce_sum(weights)
 
     logger = tf.get_logger()
     logger.debug(weights)

@@ -7,6 +7,7 @@ import tensorflow as tf
 import src.models.transformer.metrics as metrics
 import src.models.transformer.fashion_encoder as fashion_enc
 import src.data.input_pipeline as input_pipeline
+import src.models.transformer.utils as utils
 
 
 class EncoderTask:
@@ -14,15 +15,14 @@ class EncoderTask:
     def __init__(self, params):
         self.params = params
 
-    def fitb(self, model, dataset, epoch):
+    @staticmethod
+    def fitb(model, dataset, epoch):
         acc = tf.metrics.CategoricalAccuracy()
         mask = tf.constant([[[0]]])
-        empty_mask = tf.constant([[[]]], dtype="int32")
-        cnn = model.get_layer("cnn_extractor")
+        preprocessor = model.get_layer("preprocessor")
         for task in dataset:
             inputs, input_categories, targets, target_categories, target_position = task
-            if self.params["with_cnn"]:
-                targets = cnn([targets, target_categories, empty_mask])
+            targets, _ = preprocessor([targets, target_categories, None])
             res = model([inputs, input_categories, mask], training=False)
             outputs = res[0]
             metrics.fitb_acc(outputs, targets, mask, target_position, input_categories, acc)
@@ -39,17 +39,22 @@ class EncoderTask:
                 loss_value = metrics.xentropy_loss(outputs, tf.stop_gradient(targets), inputs[1], inputs[2], acc) / num_replicas
             else:
                 loss_value = metrics.xentropy_loss(outputs, targets, inputs[1], inputs[2], acc) / num_replicas
-        return loss_value, tape.gradient(loss_value, model.trainable_variables)
+        grad = tape.gradient(loss_value, model.trainable_variables)
+        return loss_value, grad
 
     def train(self):
         print(self.params, flush=True)
 
+        lookup = None
+        if self.params["with_category_grouping"]:
+            lookup = utils.build_category_lookup_table()
+
         # Prepare datasets
         train_dataset = input_pipeline.get_training_dataset(self.params["dataset_files"], self.params["batch_size"]
-                                                            , not self.params["with_cnn"])
+                                                            , not self.params["with_cnn"], lookup)
         test_dataset = input_pipeline.get_training_dataset(self.params["test_files"], self.params["valid_batch_size"]
-                                                           , not self.params["with_cnn"])
-        fitb_dataset = input_pipeline.get_fitb_dataset([self.params["fitb_file"]], not self.params["with_cnn"]).batch(1)\
+                                                           , not self.params["with_cnn"], lookup)
+        fitb_dataset = input_pipeline.get_fitb_dataset([self.params["fitb_file"]], not self.params["with_cnn"], lookup).batch(1)
 
         num_epochs = self.params["epoch_count"]
         optimizer = tf.optimizers.Adam(self.params["learning_rate"])
@@ -66,6 +71,7 @@ class EncoderTask:
 
         ckpt = tf.train.Checkpoint(step=tf.Variable(1), optimizer=optimizer, model=model)
 
+        # Threshold of valid acc when target gradient is not stopped
         max_valid = 0
 
         if "checkpoint_dir" in self.params:
@@ -77,7 +83,7 @@ class EncoderTask:
             print("Restored from {}".format(manager.latest_checkpoint), flush=True)
         else:
             print("Initializing from scratch.", flush=True)
-        self.fitb(model, fitb_dataset, 1)
+        self.fitb(model, fitb_dataset, epoch=0)
         for epoch in range(1, num_epochs + 1):
             epoch_loss_avg = tf.keras.metrics.Mean('epoch_loss')
             train_loss = tf.keras.metrics.Mean('train_loss', dtype=tf.float32)
@@ -87,7 +93,9 @@ class EncoderTask:
                 batch_number = batch_number + 1
 
                 # Optimize the model
-                if max_valid < 30:
+                if self.params["target_gradient_from"] == -1:
+                    loss_value, grads = self._grad(model, x, y, categorical_acc, stop_targets_gradient=False)
+                elif max_valid < self.params["target_gradient_from"]:
                     loss_value, grads = self._grad(model, x, y, categorical_acc)
                 else:
                     loss_value, grads = self._grad(model, x, y, categorical_acc, stop_targets_gradient=False)
@@ -117,7 +125,6 @@ class EncoderTask:
                 valid_loss = tf.keras.metrics.Mean('valid_loss', dtype=tf.float32)
                 valid_acc = tf.metrics.CategoricalAccuracy()
                 for x, y in test_dataset:
-                    # Optimize the model
                     ret = model([x[0], x[1], x[2]], training=False)
                     outputs = ret[0]
                     targets = ret[1]
@@ -158,9 +165,19 @@ def main():
     parser.add_argument("--learning-rate", type=float, help="Optimizer's learning rate")
     parser.add_argument("--valid-batch-size", type=int,
                         help="Batch size of validation dataset (by default the same as batch size)")
-    parser.add_argument("--with-cnn", help="Optimizer's learning rate", action='store_true')
-    parser.add_argument("--category_embedding", help="Add learned category embedding to image feature vectors", action='store_true')
+    parser.add_argument("--with-cnn", help="Use CNN to extract features from images", action='store_true')
+    parser.add_argument("--category-embedding", help="Add learned category embedding to image feature vectors",
+                        action='store_true')
     parser.add_argument("--categories-count", type=int, help="Add learned category embedding to image feature vectors")
+    parser.add_argument("--with-mask-category-embedding", help="Add category embedding to mask token",
+                        action='store_true')
+    parser.add_argument("--target-gradient-from", type=int,
+                        help="Value of valid accuracy, when gradient is let through target tensors, -1 for stopped "
+                             "gradient",
+                        default=0)
+    parser.add_argument("--info", type=str, help="Additional information about the configuration")
+    parser.add_argument("--with-category-grouping", help="Categories are mapped into groups",
+                        action='store_true')
 
     args = parser.parse_args()
 

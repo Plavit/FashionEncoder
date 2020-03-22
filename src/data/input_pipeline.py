@@ -50,8 +50,16 @@ def add_random_mask_positions(features, categories):
     return features, categories, token_positions
 
 
-def get_training_dataset(filenames, batch_size, with_features):
-    outfits = get_dataset(filenames, with_features).cache()
+def get_training_dataset(filenames, batch_size, with_features, category_lookup=None):
+    outfits = get_dataset(filenames, with_features)
+
+    if category_lookup is not None:
+        outfits = outfits.map(lambda inputs, input_categories:
+                              map_training_categories(inputs, input_categories, category_lookup)
+                              )
+
+    outfits = outfits.cache()
+
     outfits = outfits.map(add_random_mask_positions, tf.data.experimental.AUTOTUNE)
     outfits = outfits.shuffle(3000, 123)
 
@@ -109,19 +117,40 @@ def add_mask_mock(inputs, input_categories, targets, target_categories, target_p
     Returns:
         Example ready for FITB task
     """
+
     masked_input = tf.ones_like(inputs[0])
     masked_input = tf.expand_dims(masked_input, axis=0)
     inputs = tf.concat([masked_input, inputs], axis=0)
-    masked_category = tf.constant([-1], dtype=tf.int64)
+    masked_category = tf.constant([0], dtype=tf.int64)
     input_categories = tf.concat([masked_category, input_categories], axis=0)
 
     return inputs, input_categories, targets, target_categories, target_position
 
 
-def get_fitb_dataset(filenames, with_features):
+def map_fitb_categories(inputs, input_categories, targets, target_categories, target_position, category_lookup):
+    input_categories = category_lookup.lookup(input_categories)
+    target_categories = category_lookup.lookup(target_categories)
+
+    return inputs, input_categories, targets, target_categories, target_position
+
+
+def map_training_categories(inputs, input_categories, category_lookup):
+    input_categories = category_lookup.lookup(input_categories)
+
+    return inputs, input_categories
+
+
+def get_fitb_dataset(filenames, with_features, category_lookup=None):
     raw_dataset = tf.data.TFRecordDataset(filenames)
     if with_features:
         dataset = raw_dataset.map(parse_fitb_with_features)
     else:
         dataset = raw_dataset.map(parse_fitb_with_images)
-    return dataset.map(add_mask_mock)
+
+    if category_lookup is not None:
+        dataset = dataset.map(lambda inputs, input_categories, targets, target_categories, target_position:
+                              map_fitb_categories(
+                                  inputs, input_categories, targets, target_categories, target_position, category_lookup
+                              ))
+
+    return dataset.map(add_mask_mock).cache()
