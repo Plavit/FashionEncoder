@@ -2,6 +2,8 @@ import tensorflow as tf
 
 
 def xentropy_loss(y_pred, y_true, categories, mask_positions, acc=None):
+    logger = tf.get_logger()
+
     feature_dim = y_pred.shape[2]
 
     # Compute loss only from mask token
@@ -14,16 +16,20 @@ def xentropy_loss(y_pred, y_true, categories, mask_positions, acc=None):
     weights = tf.reshape(weights, [-1])
     weights_sum = tf.reduce_sum(weights)
 
-    logger = tf.get_logger()
+    logger.debug("Loss weights")
     logger.debug(weights)
 
     # Reshape to batch (size * seq length, feature dim)
     pred_batch = tf.reshape(y_pred, [-1, feature_dim])
     true_batch = tf.reshape(y_true, [-1, feature_dim])
-    item_count = true_batch.shape[0]
+    item_count = tf.shape(true_batch)[0]
+    logger.debug("Item Count")
+    logger.debug(item_count)
 
     # Dot product of every prediction with all labels
     logits = tf.matmul(pred_batch, true_batch, transpose_b=True)
+
+    logger.debug("Logits")
     logger.debug(logits)
 
     # One-hot labels (the indentity matrix)
@@ -35,11 +41,13 @@ def xentropy_loss(y_pred, y_true, categories, mask_positions, acc=None):
     cross_entropy = tf.nn.softmax_cross_entropy_with_logits(labels=labels, logits=logits)
     logger.debug(cross_entropy)
     cross_entropy = tf.tensordot(cross_entropy, weights, 1)
+    logger.debug("Cross Entropy")
     logger.debug(cross_entropy)
     return tf.reduce_sum(cross_entropy) / weights_sum
 
 
 def fitb_acc(y_pred, y_true, pred_positions, target_position, categories, acc: tf.metrics.CategoricalAccuracy):
+    logger = tf.get_logger()
     feature_dim = y_pred.shape[2]
 
     # Compute loss only from mask token
@@ -51,9 +59,8 @@ def fitb_acc(y_pred, y_true, pred_positions, target_position, categories, acc: t
     weights = tf.cast(weights, dtype="float32")
     weights = tf.reshape(weights, [-1])
 
-    logger = tf.get_logger()
+    logger.debug("Loss weights")
     logger.debug(weights)
-    logger.debug(target_position)
 
     # Reshape to batch (size * seq length, feature dim)
     pred_batch = tf.reshape(y_pred, [-1, feature_dim])
@@ -61,6 +68,13 @@ def fitb_acc(y_pred, y_true, pred_positions, target_position, categories, acc: t
 
     # Dot product of every prediction with all labels
     logits = tf.matmul(pred_batch, true_batch, transpose_b=True)
+
+    reduced_logits = tf.math.count_nonzero(logits)
+    tf.debugging.assert_greater(reduced_logits, tf.constant([0], dtype="int64"), "There must at least one none zero "
+                                                                                 "value in logits, otherwise the "
+                                                                                 "accuracy doesn't work")
+
+    logger.debug("Logits")
     logger.debug(logits)
 
     pred_position = tf.squeeze(pred_positions, axis=[0, 1])
@@ -70,6 +84,8 @@ def fitb_acc(y_pred, y_true, pred_positions, target_position, categories, acc: t
     sparse_indices = tf.expand_dims(sparse_indices, axis=0)
 
     labels = tf.scatter_nd(sparse_indices, tf.constant([1]), tf.shape(logits))
+    logger.debug("Labels")
     logger.debug(labels)
     if acc is not None:
         acc(labels, logits, sample_weight=weights)
+    return logits

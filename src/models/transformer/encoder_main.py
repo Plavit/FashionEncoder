@@ -20,19 +20,117 @@ class EncoderTask:
         acc = tf.metrics.CategoricalAccuracy()
         mask = tf.constant([[[0]]])
         preprocessor = model.get_layer("preprocessor")
+
         for task in dataset:
-            inputs, input_categories, targets, target_categories, target_position = task
-            targets, _ = preprocessor([targets, target_categories, None])
-            res = model([inputs, input_categories, mask], training=False)
-            outputs = res[0]
-            metrics.fitb_acc(outputs, targets, mask, target_position, input_categories, acc)
-        tf.summary.scalar('fitb_acc', acc.result(), step=epoch)
-        print("Epoch {:03d}: FITB Acc: {:.3f}".format(epoch, acc.result()), flush=True)
+            EncoderTask.fitb_step(model, preprocessor, task, mask, acc)
+        return acc.result()
 
     @staticmethod
+    def fitb_step(model, preprocessor, task, mask, acc=None):
+        logger = tf.get_logger()
+        inputs, input_categories, targets, target_categories, target_position = task
+        logger.debug("Targets")
+        logger.debug(targets)
+        _, targets = preprocessor([targets, target_categories, None])
+        res = model([inputs, input_categories, mask], training=False)
+        outputs = res[0]
+
+        logger.debug("Processed targets")
+        logger.debug(targets)
+        logger.debug("Outputs")
+        logger.debug(outputs)
+
+        metrics.fitb_acc(outputs, targets, mask, target_position, input_categories, acc)
+
+    def debug(self):
+        # Create the model
+        tf.config.experimental_run_functions_eagerly(True)
+        model = fashion_enc.create_model(self.params, is_train=False)
+        model.summary()
+
+        if self.params["checkpoint_dir"]:
+            ckpt = tf.train.Checkpoint(step=tf.Variable(1), model=model)
+            manager = tf.train.CheckpointManager(ckpt, self.params["checkpoint_dir"], max_to_keep=3)
+            ckpt.restore(manager.latest_checkpoint)
+            if manager.latest_checkpoint:
+                print("Restored from {}".format(manager.latest_checkpoint), flush=True)
+            else:
+                print("Initializing from scratch.", flush=True)
+
+        logger = tf.get_logger()
+        logger.setLevel(logging.DEBUG)
+        logger.debug(tf.executing_eagerly())
+
+        current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        train_log_dir = 'logs/' + current_time + '/debug'
+        debug_summary_writer = tf.summary.create_file_writer(train_log_dir)
+
+        train_dataset, test_dataset, fitb_dataset = self.get_datasets()
+        train_dataset = train_dataset.take(1)
+        test_dataset = test_dataset.take(1)
+        fitb_dataset = fitb_dataset.take(1)
+
+        logger.debug("-------------- FITB TRACE --------------")
+        mask = tf.constant([[[0]]])
+        preprocessor = model.get_layer("preprocessor")
+        task = tf.data.experimental.get_single_element(fitb_dataset)
+
+        tf.summary.trace_on(graph=True)
+        EncoderTask.fitb_step(model, preprocessor, task, mask)
+        with debug_summary_writer.as_default():
+            tf.summary.trace_export(
+                name="fitb_trace",
+                step=0)
+
+        logger.debug("-------------- TRAIN TRACE --------------")
+        inputs, targets = tf.data.experimental.get_single_element(train_dataset)
+        tf.summary.trace_on(graph=True)
+        ret = EncoderTask.train_step(model, inputs[0], inputs[1], inputs[2])
+        with debug_summary_writer.as_default():
+            tf.summary.trace_export(
+                name="train_trace",
+                step=0)
+
+        logger.debug("-------------- TRAIN METRICS TRACE --------------")
+        outputs = ret[0]
+        targets = ret[1]
+        tf.summary.trace_on(graph=True)
+        metrics.xentropy_loss(outputs, targets, inputs[1], inputs[2])
+        with debug_summary_writer.as_default():
+            tf.summary.trace_export(
+                name="train_metrics_trace",
+                step=0)
+
+        logger.debug("-------------- VALID TRACE --------------")
+        inputs, targets = tf.data.experimental.get_single_element(test_dataset)
+        tf.summary.trace_on(graph=True)
+        ret = EncoderTask.train_step(model, inputs[0], inputs[1], inputs[2])
+        with debug_summary_writer.as_default():
+            tf.summary.trace_export(
+                name="valid_trace",
+                step=0)
+
+        logger.debug("-------------- VALID METRICS TRACE --------------")
+        outputs = ret[0]
+        targets = ret[1]
+        tf.summary.trace_on(graph=True)
+        metrics.xentropy_loss(outputs, targets, inputs[1], inputs[2])
+        with debug_summary_writer.as_default():
+            tf.summary.trace_export(
+                name="valid_metrics_trace",
+                step=0)
+
+    @staticmethod
+    @tf.function
+    def train_step(model, inputs, input_categories, mask_positions):
+        ret = model([inputs, input_categories, mask_positions], training=True)
+        return ret[0], ret[1]
+
+    @staticmethod
+    @tf.function
     def _grad(model: tf.keras.Model, inputs, targets, acc=None, num_replicas=1, stop_targets_gradient=True):
         with tf.GradientTape() as tape:
-            ret = model([inputs[0], inputs[1], inputs[2]], training=True)
+            ret = EncoderTask.train_step(model, inputs[0], inputs[1], inputs[2])
             outputs = ret[0]
             targets = ret[1]
             if stop_targets_gradient:
@@ -42,52 +140,78 @@ class EncoderTask:
         grad = tape.gradient(loss_value, model.trainable_variables)
         return loss_value, grad
 
-    def train(self):
-        print(self.params, flush=True)
-
+    def get_datasets(self):
         lookup = None
         if self.params["with_category_grouping"]:
             lookup = utils.build_category_lookup_table()
 
         # Prepare datasets
-        train_dataset = input_pipeline.get_training_dataset(self.params["dataset_files"], self.params["batch_size"]
-                                                            , not self.params["with_cnn"], lookup)
+        if self.params["dataset_split"]:
+            train_dataset = input_pipeline.get_training_dataset(self.params["dataset_files"][:10],
+                                                                self.params["batch_size"]
+                                                                , not self.params["with_cnn"], lookup)
+        else:
+            train_dataset = input_pipeline.get_training_dataset(self.params["dataset_files"],
+                                                                self.params["batch_size"]
+                                                                , not self.params["with_cnn"], lookup)
+
         test_dataset = input_pipeline.get_training_dataset(self.params["test_files"], self.params["valid_batch_size"]
                                                            , not self.params["with_cnn"], lookup)
-        fitb_dataset = input_pipeline.get_fitb_dataset([self.params["fitb_file"]], not self.params["with_cnn"], lookup).batch(1)
+        fitb_dataset = input_pipeline.get_fitb_dataset([self.params["fitb_file"]], not self.params["with_cnn"],
+                                                       lookup).batch(1)
+
+        return train_dataset, test_dataset, fitb_dataset
+
+    def train(self):
+        print(self.params, flush=True)
+
+        train_dataset, test_dataset, fitb_dataset = self.get_datasets()
+
+        lookup = None
+        if self.params["with_category_grouping"]:
+            lookup = utils.build_category_lookup_table()
+        dirty_dataset = input_pipeline.get_training_dataset(self.params["dataset_files"][10:], self.params["batch_size"]
+                                                            , not self.params["with_cnn"], lookup)
 
         num_epochs = self.params["epoch_count"]
         optimizer = tf.optimizers.Adam(self.params["learning_rate"])
-
-        # Create the model
-        model = fashion_enc.create_model(self.params, True)
-        model.summary()
 
         # Prepare logging
         current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         train_log_dir = 'logs/' + current_time + '/train'
         train_summary_writer = tf.summary.create_file_writer(train_log_dir)
         batch_number = 0
+        if "checkpoint_dir" not in self.params:
+            self.params["checkpoint_dir"] = "./logs/" + current_time + "/tf_ckpts"
 
-        ckpt = tf.train.Checkpoint(step=tf.Variable(1), optimizer=optimizer, model=model)
+        # Create the model
+        model = fashion_enc.create_model(self.params, True)
+        test_model = fashion_enc.create_model(self.params, False)
+        model.summary()
 
         # Threshold of valid acc when target gradient is not stopped
         max_valid = 0
 
-        if "checkpoint_dir" in self.params:
-            manager = tf.train.CheckpointManager(ckpt, self.params["checkpoint_dir"], max_to_keep=3)
-        else:
-            manager = tf.train.CheckpointManager(ckpt, "./logs/" + current_time + "/tf_ckpts", max_to_keep=3)
-
+        ckpt = tf.train.Checkpoint(step=tf.Variable(1), optimizer=optimizer, model=model)
+        manager = tf.train.CheckpointManager(ckpt, self.params["checkpoint_dir"], max_to_keep=3)
+        ckpt.restore(manager.latest_checkpoint)
         if manager.latest_checkpoint:
             print("Restored from {}".format(manager.latest_checkpoint), flush=True)
         else:
             print("Initializing from scratch.", flush=True)
-        self.fitb(model, fitb_dataset, epoch=0)
+
+        fitb_res = self.fitb(model, fitb_dataset, epoch=0)
+        with train_summary_writer.as_default():
+            tf.summary.scalar('fitb_acc', fitb_res, step=0)
+        print("Epoch {:03d}: FITB Acc: {:.3f}".format(0, fitb_res), flush=True)
+
         for epoch in range(1, num_epochs + 1):
             epoch_loss_avg = tf.keras.metrics.Mean('epoch_loss')
             train_loss = tf.keras.metrics.Mean('train_loss', dtype=tf.float32)
             categorical_acc = tf.metrics.CategoricalAccuracy()
+            if max_valid > 20 and self.params["dataset_split"]:
+                train_dataset = dirty_dataset
+
             # Training loop
             for x, y in train_dataset:
                 batch_number = batch_number + 1
@@ -120,12 +244,17 @@ class EncoderTask:
                                                                    categorical_acc.result()))
 
             if epoch % 5 == 0:
-                self.fitb(model, fitb_dataset, epoch)
+                weights = model.get_weights()
+                test_model.set_weights(weights)
+                fitb_res = self.fitb(test_model, fitb_dataset, epoch)
+                print("Epoch {:03d}: FITB Acc: {:.3f}".format(epoch, fitb_res), flush=True)
+                with train_summary_writer.as_default():
+                    tf.summary.scalar('fitb_acc', fitb_res, step=epoch)
                 # Validation loop
                 valid_loss = tf.keras.metrics.Mean('valid_loss', dtype=tf.float32)
                 valid_acc = tf.metrics.CategoricalAccuracy()
                 for x, y in test_dataset:
-                    ret = model([x[0], x[1], x[2]], training=False)
+                    ret = test_model([x[0], x[1], x[2]], training=False)
                     outputs = ret[0]
                     targets = ret[1]
                     loss_value = metrics.xentropy_loss(outputs, targets, x[1], x[2], valid_acc)
@@ -141,6 +270,8 @@ class EncoderTask:
                 if valid_acc.result() > max_valid:
                     max_valid = valid_acc.result()
 
+                if max_valid > 25:
+                    return
                 print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path), flush=True)
 
         save_path = manager.save()
@@ -156,7 +287,7 @@ def main():
     parser.add_argument("--batch-size", type=int, help="Batch size")
     parser.add_argument("--filter-size", type=int, help="Transformer filter size")
     parser.add_argument("--epoch-count", type=int, help="Number of epochs")
-    parser.add_argument("--mode", type=str, help="Type of action", choices=["train", "train_multi"], required=True)
+    parser.add_argument("--mode", type=str, help="Type of action", choices=["train", "debug"], required=True)
     parser.add_argument("--hidden-size", type=int, help="Hidden size")
     parser.add_argument("--num-heads", type=int, help="Number of heads")
     parser.add_argument("--num-hidden-layers", type=int, help="Number of hidden layers")
@@ -178,6 +309,7 @@ def main():
     parser.add_argument("--info", type=str, help="Additional information about the configuration")
     parser.add_argument("--with-category-grouping", help="Categories are mapped into groups",
                         action='store_true')
+    parser.add_argument("--dataset-split", help="Split train datasets to cleaned and dirty", action='store_true')
 
     args = parser.parse_args()
 
@@ -215,11 +347,10 @@ def main():
 
     task = EncoderTask(params)
 
-    logger = tf.get_logger()
-    # logger.setLevel(logging.DEBUG)
-
     if args.mode == "train":
         task.train()
+    elif args.mode == "debug":
+        task.debug()
     else:
         print("Invalid mode")
 

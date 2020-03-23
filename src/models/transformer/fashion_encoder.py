@@ -46,13 +46,11 @@ def create_model(params, is_train):
 
         preprocessor = FashionPreprocessor(params, "preprocessor")
         encoder_inputs, training_targets = preprocessor([inputs, categories, mask_positions])
-        preprocessor.summary()
 
         internal_model = FashionEncoder(params, name="fashion_encoder")
         ret = internal_model(encoder_inputs, training=is_train)
-        internal_model.summary()
 
-        return tf.keras.Model([inputs, categories, mask_positions], [ret, training_targets])  # TODO: Change for predict
+        return tf.keras.Model([inputs, categories, mask_positions], [ret, training_targets])
 
 
 class FashionPreprocessor(tf.keras.Model):
@@ -78,10 +76,14 @@ class FashionPreprocessor(tf.keras.Model):
             self.category_embedding = tf.keras.layers.Embedding(params["categories_count"],
                                                                 output_dim=self.params["feature_dim"],
                                                                 name="category_embedding",
-                                                                embeddings_initializer="zeros", trainable=False)
+                                                                embeddings_initializer="zeros",
+                                                                trainable=True)
 
     def place_mask_token(self, inputs, mask_positions):
+        logger = tf.get_logger()
         mask_tensor = self.tokens_embedding(self.general_mask_id)
+        logger.debug("Mask tensor")
+        logger.debug(mask_tensor)
         # Repeat the mask tensor to match the count of masked items
         mask_tensors = tf.repeat(mask_tensor, tf.shape(mask_positions)[0])
         # Reshape to (number of masked items, feature_dim)
@@ -92,7 +94,9 @@ class FashionPreprocessor(tf.keras.Model):
         indices = tf.squeeze(indices, axis=[1])
         return tf.tensor_scatter_nd_update(inputs, indices, mask_tensors)
 
-    def add_category_embedding(self, inputs, categories, mask_positions, train_category_embedding=False):
+    def add_category_embedding(self, inputs, categories, mask_positions, train_category_embedding=True):
+        logger = tf.get_logger()
+
         flat_categories = tf.reshape(categories, shape=(-1, 1))
 
         # Compute padding mask # TODO: Make function out of this
@@ -130,6 +134,9 @@ class FashionPreprocessor(tf.keras.Model):
         if not train_category_embedding:
             embedded_categories = tf.stop_gradient(embedded_categories)
 
+        logger.debug("Embedded categories")
+        logger.debug(embedded_categories)
+
         return tf.keras.layers.add([inputs, embedded_categories])
 
     def call(self, inputs):
@@ -156,6 +163,10 @@ class FashionPreprocessor(tf.keras.Model):
         """
 
         inputs, categories, mask_positions = inputs[0], inputs[1], inputs[2]
+        logger = tf.get_logger()
+
+        logger.debug("Categories")
+        logger.debug(categories)
 
         if self.params["with_cnn"]:
             inputs = self.cnn_extractor([inputs, categories, mask_positions])
@@ -165,9 +176,15 @@ class FashionPreprocessor(tf.keras.Model):
         else:
             masked_inputs = inputs
 
+        logger.debug("Masked Inputs")
+        logger.debug(masked_inputs)
         if self.params["category_embedding"]:
-            training_targets = self.add_category_embedding(inputs, categories, mask_positions)
+            training_targets = self.add_category_embedding(inputs, categories, None)
             masked_inputs = self.add_category_embedding(masked_inputs, categories, mask_positions)
+            logger.debug("Masked inputs with categories")
+            logger.debug(masked_inputs)
+            logger.debug("Training targets with categories")
+            logger.debug(masked_inputs)
             return masked_inputs, training_targets
         else:
             return masked_inputs, inputs
@@ -227,7 +244,6 @@ class CNNExtractor(tf.keras.Model):
         cnn_outputs = self.cnn_model(inputs)
         cnn_outputs = tf.einsum("ij,jk->ik", mask_matrix, cnn_outputs)
         logger.debug(cnn_outputs)
-        logger.debug(cnn_outputs)
         return tf.reshape(cnn_outputs, shape=(batch_size, seq_length, self.params["feature_dim"]))
 
 
@@ -253,11 +269,12 @@ class FashionEncoder(tf.keras.Model):
         super(FashionEncoder, self).__init__(name=name)
         self.params = params
 
-        i_dense = tf.keras.layers.Dense(self.params["hidden_size"], activation="relu",
+        i_dense = tf.keras.layers.Dense(self.params["hidden_size"], activation=lambda x: tf.nn.leaky_relu(x),
                                         input_shape=(None, None, self.params["feature_dim"]), name="dense_input")
         self.input_dense = DenseLayerWrapper(i_dense, params)
         self.encoder_stack = EncoderStack(params)
-        o_dense = tf.keras.layers.Dense(self.params["feature_dim"], activation="relu", name="dense_output")
+        o_dense = tf.keras.layers.Dense(self.params["feature_dim"], activation=lambda x: tf.nn.leaky_relu(x),
+                                        name="dense_output")
         self.output_dense = DenseLayerWrapper(o_dense, params)
 
     def get_config(self):
@@ -293,7 +310,10 @@ class FashionEncoder(tf.keras.Model):
         # Variance scaling is used here because it seems to work in many problems.
         # Other reasonable initializers may also work just as well.
         with tf.name_scope("Transformer"):
-            encoder_inputs = self.input_dense(inputs)
+            logger = tf.get_logger()
+            logger.debug("Transformer inputs")
+            logger.debug(inputs)
+            encoder_inputs = self.input_dense(inputs, training=training)
             # Calculate attention bias for encoder self-attention and decoder
             # multi-headed attention layers.
             reduced_inputs = tf.equal(encoder_inputs, 0)
@@ -301,7 +321,7 @@ class FashionEncoder(tf.keras.Model):
             attention_bias = model_utils.get_padding_bias(reduced_inputs, True)
 
             encoder_outputs = self.encode(encoder_inputs, attention_bias, training)
-            output = self.output_dense(encoder_outputs)
+            output = self.output_dense(encoder_outputs, training=training)
             return output
 
     def encode(self, inputs, attention_bias, training):
@@ -384,13 +404,18 @@ class DenseLayerWrapper(tf.keras.layers.Layer):
     def call(self, x, *args, **kwargs):
         """Calls wrapped layer with same parameters."""
         training = kwargs["training"]
+        logger = tf.get_logger()
 
         # Get layer output
         y = self.layer(x, *args, **kwargs)
-
+        logger.debug("Before Dropout")
+        logger.debug(y)
         # Postprocessing: apply dropout
         if training:
+            logger.debug("Dense dropout applied")
             y = tf.nn.dropout(y, rate=self.postprocess_dropout)
+            logger.debug("After Dropout")
+            logger.debug(y)
         return y
 
 

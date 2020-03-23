@@ -16,15 +16,18 @@ python -m "src.models.transformer.encoder_main" \
   --batch-size 128 \
   --epoch-count 200 \
   --mode "train" \
-  --hidden-size 1024 \
+  --hidden-size 512 \
   --filter-size 1024 \
   --masking-mode "single-token" \
   --num-heads 16 \
   --valid-batch-size 2 \
+  --num-hidden-layers 2 \
   --learning-rate "0.0005" \
   --categories-count 10 \
   --with-category-grouping \
-  --target-gradient-from 20
+  --category-embedding \
+  --target-gradient-from 30 \
+  --info "With category"
 
 
 #python -m "src.models.transformer.encoder_main" \
