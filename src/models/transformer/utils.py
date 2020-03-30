@@ -32,3 +32,37 @@ def build_category_lookup_table():
     keys_tensor = tf.constant(keys, dtype="int64")
     vals_tensor = tf.constant(values, dtype="int64")
     return tf.lookup.StaticHashTable(tf.lookup.KeyValueTensorInitializer(keys_tensor, vals_tensor), len(categories)+1)
+
+
+def compute_padding_mask_from_categories(categories):
+    """
+
+    Args:
+        categories: Tensor of shape (batch_size, sequence_length),
+
+    Returns:
+        Matrix of shape (batch_size*sequence_length, batch_size*sequence_length) with zeroes except for diagonal.
+            There's 0 on the diagonal if the corresponding item should be masked
+            There's 1 on the diagonal if the corresponding item should not be masked
+    """
+    # Compute padding mask # TODO: Make function out of this
+    unpacked_categories = tf.reshape(categories, shape=[-1])
+    unpacked_length = tf.shape(unpacked_categories)[0]
+    padding_mask = tf.equal(unpacked_categories, 0)
+    # Category 0 is considered as masked - category embedding is not applied
+    padding_mask = tf.math.logical_not(padding_mask)
+    padding_mask = tf.cast(padding_mask, dtype="float32")
+    mask_matrix = tf.zeros(shape=(unpacked_length, unpacked_length))
+    return tf.linalg.set_diag(mask_matrix, padding_mask)
+
+
+def place_tensor_on_positions(inputs, tensor_to_place, positions):
+    # Repeat the tensor_to_place to match the count of positions
+    repeated = tf.repeat(tensor_to_place, tf.shape(positions)[0])
+    # Reshape to (number of masked items, feature_dim)
+    repeated = tf.reshape(repeated, shape=(-1, tf.shape(tensor_to_place)[0]))
+    r = tf.range(0, limit=tf.shape(positions)[0], dtype="int32")
+    r = tf.reshape(r, shape=[tf.shape(r)[0], -1, 1])
+    indices = tf.concat([r, positions], axis=-1)
+    indices = tf.squeeze(indices, axis=[1])
+    return tf.tensor_scatter_nd_update(inputs, indices, repeated)

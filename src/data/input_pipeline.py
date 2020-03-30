@@ -110,7 +110,7 @@ def parse_fitb_with_images(raw):
            example[0]["target_position"]
 
 
-def add_mask_mock(inputs, input_categories, targets, target_categories, target_position):
+def add_mask_mock(inputs, input_categories, targets, target_categories, target_position, true_mask_category=False):
     """
     Adds mock tensor to inputs at the 0th index
     Adds category -1 to input_categories tensor at the 0th index
@@ -121,7 +121,15 @@ def add_mask_mock(inputs, input_categories, targets, target_categories, target_p
     masked_input = tf.ones_like(inputs[0])
     masked_input = tf.expand_dims(masked_input, axis=0)
     inputs = tf.concat([masked_input, inputs], axis=0)
-    masked_category = tf.constant([0], dtype=tf.int64)
+    logger = tf.get_logger()
+    if true_mask_category:
+        masked_category = target_categories[0]
+        # all_same = tf.foldl(lambda a, x: tf.logical_and(tf.equal(x, masked_category), a), target_categories,
+        #                     initializer=tf.constant([True]))
+        # tf.debugging.assert_equal(all_same, tf.constant([True]))
+        masked_category = tf.expand_dims(masked_category, axis=0)
+    else:
+        masked_category = tf.constant([0], dtype=tf.int64)
     input_categories = tf.concat([masked_category, input_categories], axis=0)
 
     return inputs, input_categories, targets, target_categories, target_position
@@ -140,7 +148,7 @@ def map_training_categories(inputs, input_categories, category_lookup):
     return inputs, input_categories
 
 
-def get_fitb_dataset(filenames, with_features, category_lookup=None):
+def get_fitb_dataset(filenames, with_features, category_lookup=None, use_mask_category=False):
     raw_dataset = tf.data.TFRecordDataset(filenames)
     if with_features:
         dataset = raw_dataset.map(parse_fitb_with_features)
@@ -153,4 +161,6 @@ def get_fitb_dataset(filenames, with_features, category_lookup=None):
                                   inputs, input_categories, targets, target_categories, target_position, category_lookup
                               ))
 
-    return dataset.map(add_mask_mock).cache()
+    return dataset.map(lambda inputs, input_categories, targets, target_categories, target_position: add_mask_mock(
+        inputs, input_categories, targets, target_categories, target_position, use_mask_category
+        )).cache()
