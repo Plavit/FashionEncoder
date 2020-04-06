@@ -1,4 +1,26 @@
+import csv
+
 import tensorflow as tf
+
+
+def build_po_category_lookup_table(cat_file):
+    with open(cat_file) as categories:
+        csv_reader = csv.reader(categories, delimiter=',')
+        line_count = 0
+        cat_groups = []
+        cat_dict = {}
+        for row in csv_reader:
+            cat_number, cat, cat_group = row
+            if cat_group.strip() not in cat_groups:
+                cat_groups.append(cat_group.strip())
+
+            cat_dict[int(cat_number)] = cat_groups.index(cat_group.strip()) + 1
+
+            line_count += 1
+
+    keys_tensor = tf.constant(list(cat_dict.keys()), dtype="int64")
+    vals_tensor = tf.constant(list(cat_dict.values()), dtype="int64")
+    return tf.lookup.StaticHashTable(tf.lookup.KeyValueTensorInitializer(keys_tensor, vals_tensor), len(cat_groups) + 1)
 
 
 def build_category_lookup_table():

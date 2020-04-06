@@ -94,7 +94,8 @@ class EncoderTask:
         outputs = ret[0]
         targets = ret[1]
         tf.summary.trace_on(graph=True)
-        metrics.xentropy_loss(outputs, targets, inputs[1], inputs[2])
+        metrics.xentropy_loss(outputs, targets, inputs[1], inputs[2], debug=True,
+                              categorywise_only=self.params["categorywise_train"])
         with debug_summary_writer.as_default():
             tf.summary.trace_export(
                 name="train_metrics_trace",
@@ -113,36 +114,42 @@ class EncoderTask:
         outputs = ret[0]
         targets = ret[1]
         tf.summary.trace_on(graph=True)
-        metrics.xentropy_loss(outputs, targets, inputs[1], inputs[2])
+        metrics.xentropy_loss(outputs, targets, inputs[1], inputs[2], debug=True,
+                              categorywise_only=self.params["categorywise_train"])
         with debug_summary_writer.as_default():
             tf.summary.trace_export(
                 name="valid_metrics_trace",
                 step=0)
 
     @staticmethod
-    @tf.function
     def train_step(model, inputs, input_categories, mask_positions):
         ret = model([inputs, input_categories, mask_positions], training=True)
         return ret[0], ret[1]
 
-    @staticmethod
-    @tf.function
-    def _grad(model: tf.keras.Model, inputs, targets, acc=None, num_replicas=1, stop_targets_gradient=True):
+    def _grad(self, model: tf.keras.Model, inputs, targets, acc=None, num_replicas=1, stop_targets_gradient=True):
         with tf.GradientTape() as tape:
             ret = EncoderTask.train_step(model, inputs[0], inputs[1], inputs[2])
             outputs = ret[0]
             targets = ret[1]
             if stop_targets_gradient:
-                loss_value = metrics.xentropy_loss(outputs, tf.stop_gradient(targets), inputs[1], inputs[2], acc) / num_replicas
+                loss_value = metrics.xentropy_loss(
+                    outputs, tf.stop_gradient(targets),
+                    inputs[1], inputs[2], acc, categorywise_only=self.params["categorywise_train"]) / num_replicas
             else:
-                loss_value = metrics.xentropy_loss(outputs, targets, inputs[1], inputs[2], acc) / num_replicas
+                loss_value = metrics.xentropy_loss(
+                    outputs, targets,
+                    inputs[1], inputs[2], acc, categorywise_only=self.params["categorywise_train"]) / num_replicas
         grad = tape.gradient(loss_value, model.trainable_variables)
         return loss_value, grad
 
     def get_datasets(self):
         lookup = None
+
         if self.params["with_category_grouping"]:
-            lookup = utils.build_category_lookup_table()
+            if "category_file" in self.params:
+                lookup = utils.build_po_category_lookup_table(self.params["category_file"])
+            else:
+                lookup = utils.build_category_lookup_table()
 
         train_dataset = input_pipeline.get_training_dataset(self.params["dataset_files"],
                                                             self.params["batch_size"],
@@ -155,7 +162,7 @@ class EncoderTask:
         return train_dataset, test_dataset, fitb_dataset
 
     def train(self):
-        print(self.params, flush=True)
+
 
         train_dataset, test_dataset, fitb_dataset = self.get_datasets()
 
@@ -172,7 +179,7 @@ class EncoderTask:
 
         # Create the model
         model = fashion_enc.create_model(self.params, True)
-        # test_model = fashion_enc.create_model(self.params, False)
+        test_model = fashion_enc.create_model(self.params, False)
         model.summary()
 
         # Threshold of valid acc when target gradient is not stopped
@@ -223,31 +230,34 @@ class EncoderTask:
                                                                    categorical_acc.result()))
 
             if epoch % 5 == 0:
-                fitb_res = self.fitb(model, fitb_dataset, epoch)
+                weights = model.get_weights()
+                test_model.set_weights(weights)
+                fitb_res = self.fitb(test_model, fitb_dataset, epoch)
                 print("Epoch {:03d}: FITB Acc: {:.3f}".format(epoch, fitb_res), flush=True)
+
                 with train_summary_writer.as_default():
                     tf.summary.scalar('fitb_acc', fitb_res, step=epoch)
 
                 # Validation loop
-                valid_loss = tf.keras.metrics.Mean('valid_loss', dtype=tf.float32)
-                valid_acc = tf.metrics.CategoricalAccuracy()
-                for x, y in test_dataset:
-                    ret = model([x[0], x[1], x[2]], training=False)
-                    outputs = ret[0]
-                    targets = ret[1]
-                    loss_value = metrics.xentropy_loss(outputs, targets, x[1], x[2], valid_acc)
-                    # Track
-                    valid_loss(loss_value)
-
-                with train_summary_writer.as_default():
-                    tf.summary.scalar('valid_loss', valid_loss.result(), step=epoch)
-                    tf.summary.scalar('valid_acc', valid_acc.result(), step=epoch)
-
-                print("Epoch {:03d}: Valid loss: {:.3f}, Valid Acc: {:.3f}".format(epoch, valid_loss.result(), valid_acc.result()), flush=True)
+                # valid_loss = tf.keras.metrics.Mean('valid_loss', dtype=tf.float32)
+                # valid_acc = tf.metrics.CategoricalAccuracy()
+                # for x, y in test_dataset:
+                #     ret = model([x[0], x[1], x[2]], training=False)
+                #     outputs = ret[0]
+                #     targets = ret[1]
+                #     loss_value = metrics.xentropy_loss(outputs, targets, x[1], x[2], valid_acc)
+                #     # Track
+                #     valid_loss(loss_value)
+                #
+                # with train_summary_writer.as_default():
+                #     tf.summary.scalar('valid_loss', valid_loss.result(), step=epoch)
+                #     tf.summary.scalar('valid_acc', valid_acc.result(), step=epoch)
+                #
+                # print("Epoch {:03d}: Valid loss: {:.3f}, Valid Acc: {:.3f}".format(epoch, valid_loss.result(), valid_acc.result()), flush=True)
                 save_path = manager.save()
 
-                if valid_acc.result() > max_valid:
-                    max_valid = valid_acc.result()
+                if fitb_res > max_valid:
+                    max_valid = fitb_res
 
                 print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path), flush=True)
 
@@ -291,6 +301,9 @@ def main():
                         choices=["add", "multiply", "concat"])
     parser.add_argument("--use-mask-category", help="Use true masked item category in FITB task",
                         action='store_true')
+    parser.add_argument("--category-file", type=str, help="Path to polyvore outfits categories")
+    parser.add_argument("--categorywise-train", help="Compute loss function only between items from the same category",
+                        action='store_true')
 
     args = parser.parse_args()
 
@@ -320,10 +333,12 @@ def main():
         "attention_dropout": 0.1,
         "relu_dropout": 0.1,
         "learning_rate": 0.001,
-        "category_dim": 512
+        "category_dim": 2048
     }
 
     params.update(filtered)
+
+    print(params, flush=True)
 
     start_time = time.time()
 

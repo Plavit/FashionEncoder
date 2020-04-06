@@ -52,7 +52,7 @@ def create_model(params, is_train):
         encoder_inputs, training_targets = preprocessor([inputs, categories, mask_positions], training=is_train)
 
         internal_model = FashionEncoder(params, name="fashion_encoder")
-        ret = internal_model(encoder_inputs, training=is_train)
+        ret = internal_model([encoder_inputs, categories], training=is_train)
 
         return tf.keras.Model([inputs, categories, mask_positions], [ret, training_targets])
 
@@ -147,13 +147,15 @@ class FashionPreprocessor(tf.keras.Model):
             masked_inputs = inputs
 
         if self.params["mode"] == "debug":
+            logger.debug("Mask Positions")
+            logger.debug(mask_positions)
             logger.debug("Masked Inputs")
             logger.debug(masked_inputs)
 
         # Merge visual features with category embedding
         if self.params["category_embedding"]:
-            # training_targets = self._add_category_embedding(inputs, categories, None)
-            training_targets = inputs
+            training_targets = self._add_category_embedding(inputs, categories, None)
+            training_targets = self.input_dense(training_targets, training=training)
             masked_inputs = self._add_category_embedding(masked_inputs, categories, mask_positions)
 
             if self.params["mode"] == "debug":
@@ -167,7 +169,7 @@ class FashionPreprocessor(tf.keras.Model):
             return masked_inputs, training_targets
         else:
             masked_inputs = self.input_dense(masked_inputs, training=training)
-            return masked_inputs, inputs
+            return masked_inputs, self.input_dense(inputs, training=training)
 
 
 class CNNExtractor(tf.keras.Model):
@@ -181,7 +183,6 @@ class CNNExtractor(tf.keras.Model):
         """
         super(CNNExtractor, self).__init__(name=name)
         self.params = params
-        # self.fashion_encoder = FashionEncoder(params, name="fashion_encoder")
         self.cnn_model = tf.keras.applications.inception_v3.InceptionV3(  # type: tf.keras.models.Model
             weights='imagenet',
             include_top=False,
@@ -285,7 +286,7 @@ class FashionEncoder(tf.keras.Model):
           NotImplementedError: If try to use padded decode method on CPU/GPUs.
         """
 
-        # inputs, categories, mask_positions = inputs[0], inputs[1], inputs[2]
+        inputs, categories = inputs[0], inputs[1]
 
         # Variance scaling is used here because it seems to work in many problems.
         # Other reasonable initializers may also work just as well.
@@ -297,14 +298,17 @@ class FashionEncoder(tf.keras.Model):
 
             # Calculate attention bias for encoder self-attention and decoder
             # multi-headed attention layers.
-            reduced_inputs = tf.equal(inputs, 0)
-            reduced_inputs = tf.reduce_all(reduced_inputs, axis=2)
-            attention_bias = model_utils.get_padding_bias(reduced_inputs, True)
+            reduced_inputs = tf.equal(categories, 0)   #TODO
+            #reduced_inputs = tf.reduce_all(reduced_inputs, axis=2)
+            if self.params["mode"] == "debug":
+                logger.debug("Reduces inputs")
+                logger.debug(reduced_inputs)
+            attention_bias = model_utils.get_padding_bias(categories, True)
 
             output = self.encode(inputs, attention_bias, training)
 
-            if self.params["hidden_size"] != self.params["feature_dim"]:
-                output = self.output_dense(output, training=training)
+            # if self.params["hidden_size"] != self.params["feature_dim"]:
+            #     output = self.output_dense(output, training=training)
 
             return output
 

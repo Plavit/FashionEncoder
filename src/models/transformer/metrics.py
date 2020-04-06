@@ -1,7 +1,10 @@
 import tensorflow as tf
 
 
-def xentropy_loss(y_pred, y_true, categories, mask_positions, acc=None, debug=False):
+_NEG_INF_FP32 = -1e9
+
+
+def xentropy_loss(y_pred, y_true, categories, mask_positions, acc=None, debug=False, categorywise_only=False):
     logger = tf.get_logger()
 
     feature_dim = y_pred.shape[2]
@@ -23,6 +26,18 @@ def xentropy_loss(y_pred, y_true, categories, mask_positions, acc=None, debug=Fa
 
     # Dot product of every prediction with all labels
     logits = tf.matmul(pred_batch, true_batch, transpose_b=True)
+
+    # Compute logits only within categories
+    if categorywise_only:
+        flat_categories = tf.reshape(categories, [-1])
+        cat_mask = tf.equal(flat_categories[:, tf.newaxis], flat_categories[tf.newaxis, :])
+        cat_mask = tf.logical_not(cat_mask)
+        cat_mask = tf.cast(cat_mask, dtype="float32")
+        cat_mask = cat_mask * _NEG_INF_FP32  # -inf on cells when categories don't match
+        logits = tf.add(logits, cat_mask)
+        if debug:
+            logger.debug("Category mask")
+            logger.debug(cat_mask)
 
     if debug:
         logger.debug("Loss weights")
