@@ -47,7 +47,7 @@ def create_model(params, is_train):
         else:
             inputs = tf.keras.layers.Input((None, params["feature_dim"]), dtype="float32", name="inputs")
 
-        preprocessor = FashionPreprocessor(params, "preprocessor")
+        preprocessor = FashionPreprocessorV2(params, "preprocessor")
 
         encoder_inputs, training_targets = preprocessor([inputs, categories, mask_positions], training=is_train)
 
@@ -55,6 +55,119 @@ def create_model(params, is_train):
         ret = internal_model([encoder_inputs, categories], training=is_train)
 
         return tf.keras.Model([inputs, categories, mask_positions], [ret, training_targets])
+
+
+class FashionPreprocessorV2(tf.keras.Model):
+
+    def __init__(self, params, name=None):
+        """Initialize layers to build preprocessor.
+
+        Args:
+          params: hyperparameter object defining layer sizes, dropout values, etc.
+          name: name of the model.
+        """
+        super(FashionPreprocessorV2, self).__init__(name=name)
+        self.params = params
+
+        self.tokens_embedding = tf.keras.layers.Embedding(input_dim=params["categories_count"],
+                                                          output_dim=self.params["hidden_size"],
+                                                          name="tokens_embedding")
+        self.general_mask_id = tf.constant([0])
+
+        if params["with_cnn"]:
+            self.cnn_extractor = CNNExtractor(params, "cnn_extractor")
+
+        if params["category_embedding"]:
+            if params["category_merge"] == "add":
+                self.category_embedding = layers.CategoryAdder(params)
+            elif params["category_merge"] == "multiply":
+                self.category_embedding = layers.CategoryMultiplier(params)
+            elif params["category_merge"] == "concat":
+                self.category_embedding = layers.CategoryConcater(params)
+
+        i_dense = tf.keras.layers.Dense(self.params["hidden_size"], activation=lambda x: tf.nn.leaky_relu(x),
+                                        input_shape=(None, None, self.params["feature_dim"]), name="dense_input")
+        self.input_dense = DenseLayerWrapper(i_dense, params)
+
+    def _place_mask_token(self, inputs, categories, mask_positions):
+        logger = tf.get_logger()
+
+        with tf.name_scope("Masking"):
+            # categories = tf.reshape(categories, (-1, 1))
+            cat_indices = tf.reshape(mask_positions, (-1, 1))
+            mask_categories = tf.gather_nd(categories, mask_positions, batch_dims=1)
+            mask_categories = tf.reshape(mask_categories, (-1, 1))
+            if self.params["mode"] == "debug":
+                logger.debug("Categories")
+                logger.debug(categories)
+                logger.debug("Category indices")
+                logger.debug(cat_indices)
+                logger.debug("Mask category")
+                logger.debug(mask_categories)
+            mask_tensor = self.tokens_embedding(mask_categories)
+            mask_tensor = tf.squeeze(mask_tensor, axis=[1])
+            if self.params["mode"] == "debug":
+                logger.debug("Mask tensor")
+                logger.debug(mask_tensor)
+
+            masked_inputs = utils.place_tensor_on_positions(inputs, mask_tensor, mask_positions, repeated=False)
+
+        return masked_inputs
+
+    def _add_category_embedding(self, inputs, categories, mask_positions):
+        return self.category_embedding([inputs, categories, mask_positions])
+
+    def call(self, inputs, *args, **kwargs):
+        """Calculate target logits or inferred target sequences.
+
+        Args:
+          inputs: input tensor list of size 1 or 2.
+            First item, inputs: float tensor with shape [batch_size, input_length, feature_dim].
+            Second item (optional), targets: None or float tensor with shape
+              [batch_size, target_length, feature_dim].
+          training: boolean, whether in training mode or not.
+
+        Returns:
+          If targets is defined, then return logits for each word in the target
+          sequence. float tensor with shape [batch_size, target_length, feature_dim]
+          If target is none, then generate output sequence one token at a time.
+            returns a dictionary {
+              outputs: [batch_size, feature_dim]
+              scores: [batch_size, float]}
+          Even when float16 is used, the output tensor(s) are always float32.
+
+        Raises:
+          NotImplementedError: If try to use padded decode method on CPU/GPUs.
+        """
+
+        inputs, categories, mask_positions = inputs[0], inputs[1], inputs[2]
+        logger = tf.get_logger()
+        training = kwargs["training"]
+        if self.params["mode"] == "debug":
+            logger.debug("Categories")
+            logger.debug(categories)
+
+        # Extract Image features if needed
+        if self.params["with_cnn"]:
+            inputs = self.cnn_extractor([inputs, categories, mask_positions])
+
+        inputs = self.input_dense(inputs, training=training)
+
+        # Merge visual features with category embedding
+        if self.params["category_embedding"]:
+            inputs = self._add_category_embedding(inputs, categories, None)
+
+        if self.params["mode"] == "debug":
+            logger.debug("Inputs with categories")
+            logger.debug(inputs)
+
+        # Place mask tokens
+        if self.params["masking_mode"] == "single-token" and mask_positions is not None:
+            masked_inputs = self._place_mask_token(inputs, categories, mask_positions)
+        else:
+            masked_inputs = inputs
+
+        return masked_inputs, inputs
 
 
 class FashionPreprocessor(tf.keras.Model):

@@ -6,7 +6,6 @@ import tensorflow as tf
 def build_po_category_lookup_table(cat_file):
     with open(cat_file) as categories:
         csv_reader = csv.reader(categories, delimiter=',')
-        line_count = 0
         cat_groups = []
         cat_dict = {}
         for row in csv_reader:
@@ -15,8 +14,6 @@ def build_po_category_lookup_table(cat_file):
                 cat_groups.append(cat_group.strip())
 
             cat_dict[int(cat_number)] = cat_groups.index(cat_group.strip()) + 1
-
-            line_count += 1
 
     keys_tensor = tf.constant(list(cat_dict.keys()), dtype="int64")
     vals_tensor = tf.constant(list(cat_dict.values()), dtype="int64")
@@ -78,13 +75,16 @@ def compute_padding_mask_from_categories(categories):
     return tf.linalg.set_diag(mask_matrix, padding_mask)
 
 
-def place_tensor_on_positions(inputs, tensor_to_place, positions):
-    # Repeat the tensor_to_place to match the count of positions
-    repeated = tf.repeat(tensor_to_place, tf.shape(positions)[0])
-    # Reshape to (number of masked items, feature_dim)
-    repeated = tf.reshape(repeated, shape=(-1, tf.shape(tensor_to_place)[0]))
+def place_tensor_on_positions(inputs, tensor_to_place, positions, repeated=True):
+    if repeated:
+        # Repeat the tensor_to_place to match the count of positions
+        repeated = tf.repeat(tensor_to_place, tf.shape(positions)[0])
+        # Reshape to (number of masked items, feature_dim)
+        updates = tf.reshape(repeated, shape=(-1, tf.shape(tensor_to_place)[0]))
+    else:
+        updates = tensor_to_place
     r = tf.range(0, limit=tf.shape(positions)[0], dtype="int32")
     r = tf.reshape(r, shape=[tf.shape(r)[0], -1, 1])
     indices = tf.concat([r, positions], axis=-1)
     indices = tf.squeeze(indices, axis=[1])
-    return tf.tensor_scatter_nd_update(inputs, indices, repeated)
+    return tf.tensor_scatter_nd_update(inputs, indices, updates)

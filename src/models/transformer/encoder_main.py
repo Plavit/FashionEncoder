@@ -18,7 +18,7 @@ class EncoderTask:
     @staticmethod
     def fitb(model, dataset, epoch):
         acc = tf.metrics.CategoricalAccuracy()
-        mask = tf.constant([[[0]]])
+        mask = tf.constant([[[0]]])  # FITB mask token is placed at 0th index
         preprocessor = model.get_layer("preprocessor")
 
         for task in dataset:
@@ -179,7 +179,7 @@ class EncoderTask:
 
         # Create the model
         model = fashion_enc.create_model(self.params, True)
-        test_model = fashion_enc.create_model(self.params, False)
+        # test_model = fashion_enc.create_model(self.params, False)
         model.summary()
 
         # Threshold of valid acc when target gradient is not stopped
@@ -229,10 +229,10 @@ class EncoderTask:
             print("Epoch {:03d}: Loss: {:.3f}, Acc: {:.3f}".format(epoch, epoch_loss_avg.result(),
                                                                    categorical_acc.result()))
 
-            if epoch % 5 == 0:
-                weights = model.get_weights()
-                test_model.set_weights(weights)
-                fitb_res = self.fitb(test_model, fitb_dataset, epoch)
+            if epoch % 2 == 0:
+                # weights = model.get_weights()
+                # test_model.set_weights(weights)
+                fitb_res = self.fitb(model, fitb_dataset, epoch)
                 print("Epoch {:03d}: FITB Acc: {:.3f}".format(epoch, fitb_res), flush=True)
 
                 with train_summary_writer.as_default():
@@ -333,7 +333,7 @@ def main():
         "attention_dropout": 0.1,
         "relu_dropout": 0.1,
         "learning_rate": 0.001,
-        "category_dim": 2048
+        "category_dim": 512
     }
 
     params.update(filtered)

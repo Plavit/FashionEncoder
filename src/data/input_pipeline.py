@@ -45,7 +45,7 @@ def append_targets(features, categories, token_pos):
 
 def add_random_mask_positions(features, categories):
     seq_length = tf.shape(categories)[0]
-    random_position = tf.random.uniform((1,), minval=0, maxval=seq_length, dtype="int32")
+    random_position = tf.random.uniform((1,), minval=0, maxval=seq_length, dtype="int32", seed=123)
     token_positions = tf.expand_dims(random_position, 0)
     return features, categories, token_positions
 
