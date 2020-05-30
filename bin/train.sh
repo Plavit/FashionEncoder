@@ -7,18 +7,19 @@ python -m "src.models.transformer.encoder_main" \
   --batch-size 128 \
   --epoch-count 200 \
   --mode "train" \
-  --hidden-size 512 \
+  --hidden-size 1024 \
   --filter-size 1024 \
   --masking-mode "single-token" \
   --num-heads 16 \
   --valid-batch-size 2 \
   --num-hidden-layers 1 \
   --learning-rate "0.0005" \
-  --categories-count 100 \
+  --categories-count 50 \
   --category-merge "add" \
   --target-gradient-from 40 \
   --info "PreprocessorV2" \
   --category-file "/mnt/0/projects/outfit-generation/data/raw/polyvore_outfits/categories.csv" \
+  --category-embedding \
   --use-mask-category \
   --with-category-grouping \
   --with-mask-category-embedding \

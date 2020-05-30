@@ -241,10 +241,15 @@ class Attention(tf.keras.layers.Layer):
     # Linearly project the query, key and value using different learned
     # projections. Splitting heads is automatically done during the linear
     # projections --> [batch_size, length, num_heads, dim_per_head].
+    logger = tf.get_logger()
     query = self.query_dense_layer(query_input)
 
     if categories is not None:
         key = self.key_dense_layer(categories)
+        logger.debug("One hot categories")
+        logger.debug(categories)
+        logger.debug("Keys")
+        logger.debug(key)
     else:
         key = self.key_dense_layer(source_input)
 
@@ -301,4 +306,4 @@ class SelfAttention(Attention):
   def call(self, query_input, categories, bias, training, cache=None,
            decode_loop_step=None):
     return super(SelfAttention, self).call(
-        query_input, query_input, bias, training, cache, decode_loop_step)
+        query_input, categories, query_input, bias, training, cache, decode_loop_step)

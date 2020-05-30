@@ -61,7 +61,7 @@ def get_training_dataset(filenames, batch_size, with_features, category_lookup=N
     outfits = outfits.cache()
 
     outfits = outfits.map(add_random_mask_positions, tf.data.experimental.AUTOTUNE)
-    outfits = outfits.shuffle(3000, 123)
+    outfits = outfits.shuffle(20000, 123)
 
     if with_features:
         outfits = outfits.padded_batch(batch_size, ([None, 2048], [None], [None, 1]), drop_remainder=True)

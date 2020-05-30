@@ -333,7 +333,7 @@ def main():
         "attention_dropout": 0.1,
         "relu_dropout": 0.1,
         "learning_rate": 0.001,
-        "category_dim": 512
+        "category_dim": 1024
     }
 
     params.update(filtered)

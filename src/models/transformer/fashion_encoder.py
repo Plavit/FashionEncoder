@@ -24,7 +24,6 @@ from __future__ import print_function
 import tensorflow as tf
 
 from official.transformer.model import model_utils
-from official.transformer.v2 import attention_layer
 from official.transformer.v2 import ffn_layer
 import src.models.transformer.layers as layers
 import src.models.transformer.utils as utils
@@ -36,7 +35,7 @@ import src.models.transformer.utils as utils
 
 
 def create_model(params, is_train):
-    """Creates a Fashion Encoder based model."""
+    """Creates a Fashion Encoder model."""
     with tf.name_scope("model"):
 
         categories = tf.keras.layers.Input((None,), dtype="int32", name="categories")
@@ -184,7 +183,7 @@ class FashionPreprocessor(tf.keras.Model):
 
         self.tokens_embedding = tf.keras.layers.Embedding(input_dim=1,
                                                           output_dim=self.params["feature_dim"],
-                                                          name="tokens_embedding")
+                                                          name="tokens_embedding",embeddings_initializer="ones")
         self.general_mask_id = tf.constant([0])
 
         if params["with_cnn"]:
@@ -363,7 +362,7 @@ class FashionEncoder(tf.keras.Model):
         self.encoder_stack = EncoderStack(params)
 
         if self.params["category_merge"] == "concat":
-            units = self.params["feature_dim"] # + self.params["category_dim"]
+            units = self.params["feature_dim"]  # + self.params["category_dim"]
         else:
             units = self.params["feature_dim"]
 
@@ -413,19 +412,27 @@ class FashionEncoder(tf.keras.Model):
             # multi-headed attention layers.
             reduced_inputs = tf.equal(categories, 0)   #TODO
             #reduced_inputs = tf.reduce_all(reduced_inputs, axis=2)
+
+            attention_bias = model_utils.get_padding_bias(categories, True)
+
+            one_hot_categories = tf.one_hot(categories, self.params["categories_count"])
+
             if self.params["mode"] == "debug":
                 logger.debug("Reduces inputs")
                 logger.debug(reduced_inputs)
-            attention_bias = model_utils.get_padding_bias(categories, True)
+                logger.debug("Categories")
+                logger.debug(categories)
+                logger.debug("One hot")
+                logger.debug(one_hot_categories)
 
-            output = self.encode(inputs, attention_bias, training)
+            output = self.encode(inputs, one_hot_categories, attention_bias, training)
 
             # if self.params["hidden_size"] != self.params["feature_dim"]:
             #     output = self.output_dense(output, training=training)
 
             return output
 
-    def encode(self, inputs, attention_bias, training):
+    def encode(self, inputs, categories, attention_bias, training):
         """Generate continuous representation for inputs.
 
         Args:
@@ -437,7 +444,7 @@ class FashionEncoder(tf.keras.Model):
           float tensor with shape [batch_size, input_length, hidden_size]
         """
         with tf.name_scope("encode"):
-            inputs_padding = model_utils.get_padding(inputs)
+            inputs_padding = model_utils.get_padding(categories)
             attention_bias = tf.cast(attention_bias, self.params["dtype"])
             encoder_inputs = inputs
 
@@ -446,7 +453,7 @@ class FashionEncoder(tf.keras.Model):
                     encoder_inputs, rate=self.params["layer_postprocess_dropout"])
 
             return self.encoder_stack(
-                encoder_inputs, attention_bias, inputs_padding, training=training)
+                encoder_inputs, categories, attention_bias, inputs_padding, training=training)
 
 
 class PrePostProcessingWrapper(tf.keras.layers.Layer):
@@ -542,7 +549,7 @@ class EncoderStack(tf.keras.layers.Layer):
         params = self.params
         for _ in range(params["num_hidden_layers"]):
             # Create sublayers for each layer.
-            self_attention_layer = attention_layer.SelfAttention(
+            self_attention_layer = layers.SelfAttention(
                 params["hidden_size"], params["num_heads"],
                 params["attention_dropout"])
             feed_forward_network = ffn_layer.FeedForwardNetwork(
@@ -563,7 +570,7 @@ class EncoderStack(tf.keras.layers.Layer):
             "params": self.params,
         }
 
-    def call(self, encoder_inputs, attention_bias, inputs_padding, training):
+    def call(self, encoder_inputs, categories, attention_bias, inputs_padding, training):
         """Return the output of the encoder layer stacks.
 
         Args:
@@ -586,7 +593,7 @@ class EncoderStack(tf.keras.layers.Layer):
             with tf.name_scope("layer_%d" % n):
                 with tf.name_scope("self_attention"):
                     encoder_inputs = self_attention_layer(
-                        encoder_inputs, attention_bias, training=training)
+                        encoder_inputs, categories, attention_bias, training=training)
                 with tf.name_scope("ffn"):
                     encoder_inputs = feed_forward_network(
                         encoder_inputs, training=training)
