@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-"""Defines the Fashion Transformer model in TF 2.0.
+
+"""Defines the Fashion Outfit Encoder model in TF 2.0.
 
 Model paper: https://arxiv.org/pdf/1706.03762.pdf
 Transformer model code source: https://github.com/tensorflow/tensor2tensor
@@ -25,8 +26,8 @@ import tensorflow as tf
 
 from official.transformer.model import model_utils
 from official.transformer.v2 import ffn_layer
-import src.models.transformer.layers as layers
-import src.models.transformer.utils as utils
+import src.models.encoder.layers as layers
+import src.models.encoder.utils as utils
 
 
 # Disable the not-callable lint error, since it claims many objects are not
@@ -92,7 +93,6 @@ class FashionPreprocessorV2(tf.keras.Model):
         logger = tf.get_logger()
 
         with tf.name_scope("Masking"):
-            # categories = tf.reshape(categories, (-1, 1))
             cat_indices = tf.reshape(mask_positions, (-1, 1))
             mask_categories = tf.gather_nd(categories, mask_positions, batch_dims=1)
             mask_categories = tf.reshape(mask_categories, (-1, 1))
@@ -103,12 +103,14 @@ class FashionPreprocessorV2(tf.keras.Model):
                 logger.debug(cat_indices)
                 logger.debug("Mask category")
                 logger.debug(mask_categories)
+            # Get mask token embeddings based on category
             mask_tensor = self.tokens_embedding(mask_categories)
             mask_tensor = tf.squeeze(mask_tensor, axis=[1])
             if self.params["mode"] == "debug":
                 logger.debug("Mask tensor")
                 logger.debug(mask_tensor)
 
+            # Replace actual embedding with mask token embeddings
             masked_inputs = utils.place_tensor_on_positions(inputs, mask_tensor, mask_positions, repeated=False)
 
         return masked_inputs
@@ -120,20 +122,16 @@ class FashionPreprocessorV2(tf.keras.Model):
         """Calculate target logits or inferred target sequences.
 
         Args:
-          inputs: input tensor list of size 1 or 2.
-            First item, inputs: float tensor with shape [batch_size, input_length, feature_dim].
-            Second item (optional), targets: None or float tensor with shape
-              [batch_size, target_length, feature_dim].
+          inputs: input tensor list of size 3
+            First item, inputs: float tensor
+             - When using already extracted features with shape [batch_size, seq_length, feature_dim]
+             - When using images with shape [batch_size, input_length, image_width, image_height, 3]
+            Second item, categories: int tensor with shape [batch_size, seq_length, feature_dim].
+            Third item, mask positions: int tensor with shape [batch_size, seq_length, 1]
           training: boolean, whether in training mode or not.
 
         Returns:
-          If targets is defined, then return logits for each word in the target
-          sequence. float tensor with shape [batch_size, target_length, feature_dim]
-          If target is none, then generate output sequence one token at a time.
-            returns a dictionary {
-              outputs: [batch_size, feature_dim]
-              scores: [batch_size, float]}
-          Even when float16 is used, the output tensor(s) are always float32.
+          Embedded outfits with shape [batch_size, seq_length, feature_dim]
 
         Raises:
           NotImplementedError: If try to use padded decode method on CPU/GPUs.
@@ -152,7 +150,7 @@ class FashionPreprocessorV2(tf.keras.Model):
 
         inputs = self.input_dense(inputs, training=training)
 
-        # Merge visual features with category embedding
+        # Merge image features with category embedding
         if self.params["category_embedding"]:
             inputs = self._add_category_embedding(inputs, categories, None)
 
@@ -311,11 +309,11 @@ class CNNExtractor(tf.keras.Model):
 
     def call(self, inputs):
         """
-
+        TODO
         Args:
             inputs: tuple (inputs, categories, mask_positions)
               inputs - tensor of shape (batch_size, seq_length, 299, 299, 3)
-            training:
+            training: T
         """
         logger = tf.get_logger()
 
@@ -338,19 +336,13 @@ class CNNExtractor(tf.keras.Model):
 
 
 class FashionEncoder(tf.keras.Model):
-    """Transformer model with Keras.
+    """Encoder model with Keras.
 
     Implemented as described in: https://arxiv.org/pdf/1706.03762.pdf
-
-    The Transformer model consists of an encoder and decoder. The input is a sequence of image features and sequence of
-    categories (or a batch of these sequences). The encoder produces a continuous
-    representation, and the decoder uses the encoder output to generate
-    probabilities for the output sequence.
-
     """
 
     def __init__(self, params, name=None):
-        """Initialize layers to build Transformer model.
+        """Initialize layers to build Encoder model.
 
         Args:
           params: hyperparameter object defining layer sizes, dropout values, etc.
@@ -379,10 +371,9 @@ class FashionEncoder(tf.keras.Model):
         """Calculate target logits or inferred target sequences.
 
         Args:
-          inputs: input tensor list of size 1 or 2.
-            First item, inputs: float tensor with shape [batch_size, input_length, feature_dim].
-            Second item (optional), targets: None or float tensor with shape
-              [batch_size, target_length, feature_dim].
+          inputs: input tensor list of size 2.
+            First item, inputs: float tensor with shape [batch_size, seq_length, feature_dim].
+            Second item, categories: None or float tensor with shape [batch_size, seq_length, 1].
           training: boolean, whether in training mode or not.
 
         Returns:

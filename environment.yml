@@ -1,8 +1,10 @@
-name: data-science
+name: outfit-generation
 channels:
   - defaults
+  - conda-forge
 dependencies:
   - python=3.7
   - tensorflow-gpu
   - jupyter
   - pillow
+  - keras-tuner

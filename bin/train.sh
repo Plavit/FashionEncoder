@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-python -m "src.models.transformer.encoder_main" \
+python -m "src.models.encoder.encoder_main" \
   --dataset-files "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-train-000-1.tfrecord" \
   --test-files "/mnt/0/projects/outfit-generation/data/processed/tfrecords/valid-000-1.tfrecord" \
   --fitb-file "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-fitb-features-valid.tfrecord" \
@@ -11,21 +11,22 @@ python -m "src.models.transformer.encoder_main" \
   --filter-size 1024 \
   --masking-mode "single-token" \
   --num-heads 16 \
-  --valid-batch-size 2 \
   --num-hidden-layers 1 \
   --learning-rate "0.0005" \
   --categories-count 50 \
   --category-merge "add" \
-  --target-gradient-from 40 \
   --info "PreprocessorV2" \
   --category-file "/mnt/0/projects/outfit-generation/data/raw/polyvore_outfits/categories.csv" \
   --category-embedding \
   --use-mask-category \
   --with-category-grouping \
   --with-mask-category-embedding \
-  --categorywise-train
+  --categorywise-train \
+  --early-stop \
+  --early-stop-patience 2 \
+  --early-stop-delta 1
 
-#python -m "src.models.transformer.encoder_main" \
+#python -m "src.models.encoder.encoder_main" \
 #  --dataset-files "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-images-train-000-10.tfrecord" \
 #     "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-images-train-001-10.tfrecord" \
 #     "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-images-train-002-10.tfrecord" \
@@ -62,7 +63,7 @@ python -m "src.models.transformer.encoder_main" \
 #  --checkpoint-dir "/mnt/0/projects/outfit-generation/logs/20200408-cnn-tuning/tf_ckpts"
 
 
-#python -m "src.models.transformer.encoder_main" \
+#python -m "src.models.encoder.encoder_main" \
 #  --dataset-files "/mnt/0/projects/outfit-generation/data/processed/tfrecords/train-000-10.tfrecord" \
 #     "/mnt/0/projects/outfit-generation/data/processed/tfrecords/train-001-10.tfrecord" \
 #     "/mnt/0/projects/outfit-generation/data/processed/tfrecords/train-002-10.tfrecord" \
@@ -92,7 +93,7 @@ python -m "src.models.transformer.encoder_main" \
 #  --target-gradient-from 60 \
 #  --info "Only one dense layer"
 
-#python -m "src.models.transformer.encoder_main" \
+#python -m "src.models.encoder.encoder_main" \
 #  --dataset-files "/mnt/0/projects/outfit-generation/data/processed/tfrecords/debug-cleaned-raw-000-1.tfrecord" \
 #  --test-files "/mnt/0/projects/outfit-generation/data/processed/tfrecords/valid-cleaned-raw-000-1.tfrecord" \
 #  --batch-size 16 \
@@ -105,7 +106,7 @@ python -m "src.models.transformer.encoder_main" \
 #  --valid-batch-size 2 \
 #  --with-cnn
 
-#python -m "src.models.transformer.encoder_main" \
+#python -m "src.models.encoder.encoder_main" \
 #  --dataset-files "/mnt/0/projects/outfit-generation/data/processed/tfrecords/train-cleaned-raw-000-10.tfrecord" \
 #     "/mnt/0/projects/outfit-generation/data/processed/tfrecords/train-cleaned-raw-001-10.tfrecord" \
 #     "/mnt/0/projects/outfit-generation/data/processed/tfrecords/train-cleaned-raw-002-10.tfrecord" \

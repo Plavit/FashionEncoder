@@ -2,7 +2,7 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-import src.models.transformer.utils as utils
+import src.models.encoder.utils as utils
 import tensorflow as tf
 from official.nlp import bert_modeling as common_layer
 

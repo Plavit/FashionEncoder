@@ -1,7 +1,4 @@
 import tensorflow as tf
-from tensorflow.python.keras.preprocessing.image import array_to_img, img_to_array
-from PIL import Image
-import numpy as np
 
 
 def parse_example_with_features(raw):

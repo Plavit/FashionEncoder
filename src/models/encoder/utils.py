@@ -88,3 +88,33 @@ def place_tensor_on_positions(inputs, tensor_to_place, positions, repeated=True)
     indices = tf.concat([r, positions], axis=-1)
     indices = tf.squeeze(indices, axis=[1])
     return tf.tensor_scatter_nd_update(inputs, indices, updates)
+
+
+class EarlyStoppingMonitor:
+
+    def __init__(self, patience: int, min_delta: float, warmup: int = 20):
+        """
+        Initialize EarlyStoppingMonitor
+        Args:
+            patience: Number of runs to wait for an improvement
+            min_delta: Minimum increase of accuracy to qualify as an improvement
+            warmup: Number of initial runs when improvement is not required
+        """
+        self.last_acc = 0
+        self.runs_without_improvement = 0
+        self.patience = patience
+        self.min_delta = min_delta
+        self.total_runs = 0
+        self.warmup = warmup
+
+    def should_stop(self, current_acc, runs=1):
+        self.total_runs += runs
+        if current_acc - self.last_acc > self.min_delta:
+            self.last_acc = current_acc
+            self.runs_without_improvement = 0
+            return False
+
+        self.runs_without_improvement += runs
+
+        if self.runs_without_improvement > self.patience and self.total_runs > self.warmup:
+            return True

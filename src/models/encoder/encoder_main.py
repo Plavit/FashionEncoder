@@ -4,10 +4,10 @@ import logging
 import time
 
 import tensorflow as tf
-import src.models.transformer.metrics as metrics
-import src.models.transformer.fashion_encoder as fashion_enc
+import src.models.encoder.metrics as metrics
+import src.models.encoder.fashion_encoder as fashion_enc
 import src.data.input_pipeline as input_pipeline
-import src.models.transformer.utils as utils
+import src.models.encoder.utils as utils
 
 
 class EncoderTask:
@@ -154,17 +154,21 @@ class EncoderTask:
         train_dataset = input_pipeline.get_training_dataset(self.params["dataset_files"],
                                                             self.params["batch_size"],
                                                             not self.params["with_cnn"], lookup)
-        test_dataset = input_pipeline.get_training_dataset(self.params["test_files"], self.params["valid_batch_size"]
-                                                           , not self.params["with_cnn"], lookup)
+
         fitb_dataset = input_pipeline.get_fitb_dataset([self.params["fitb_file"]], not self.params["with_cnn"],
                                                        lookup, self.params["use_mask_category"]).batch(1)
 
-        return train_dataset, test_dataset, fitb_dataset
+        return train_dataset, fitb_dataset
 
-    def train(self):
+    def train(self, on_epoch_end=None):
+        if on_epoch_end is None:
+            on_epoch_end = []
 
+        # Create the model
+        model = fashion_enc.create_model(self.params, True)
+        model.summary()
 
-        train_dataset, test_dataset, fitb_dataset = self.get_datasets()
+        train_dataset, fitb_dataset = self.get_datasets()
 
         num_epochs = self.params["epoch_count"]
         optimizer = tf.optimizers.Adam(self.params["learning_rate"])
@@ -177,11 +181,6 @@ class EncoderTask:
         if "checkpoint_dir" not in self.params:
             self.params["checkpoint_dir"] = "./logs/" + current_time + "/tf_ckpts"
 
-        # Create the model
-        model = fashion_enc.create_model(self.params, True)
-        # test_model = fashion_enc.create_model(self.params, False)
-        model.summary()
-
         # Threshold of valid acc when target gradient is not stopped
         max_valid = 0
 
@@ -192,6 +191,10 @@ class EncoderTask:
             print("Restored from {}".format(manager.latest_checkpoint), flush=True)
         else:
             print("Initializing from scratch.", flush=True)
+
+        if "early_stop" in self.params and self.params["early_stop"]:
+            early_stopping_monitor = utils.EarlyStoppingMonitor(self.params["early_stop_patience"],
+                                                                self.params["early_stop_delta"])
 
         for epoch in range(1, num_epochs + 1):
             epoch_loss_avg = tf.keras.metrics.Mean('epoch_loss')
@@ -230,36 +233,27 @@ class EncoderTask:
                                                                    categorical_acc.result()))
 
             if epoch % 2 == 0:
-                # weights = model.get_weights()
-                # test_model.set_weights(weights)
                 fitb_res = self.fitb(model, fitb_dataset, epoch)
                 print("Epoch {:03d}: FITB Acc: {:.3f}".format(epoch, fitb_res), flush=True)
 
                 with train_summary_writer.as_default():
                     tf.summary.scalar('fitb_acc', fitb_res, step=epoch)
 
-                # Validation loop
-                # valid_loss = tf.keras.metrics.Mean('valid_loss', dtype=tf.float32)
-                # valid_acc = tf.metrics.CategoricalAccuracy()
-                # for x, y in test_dataset:
-                #     ret = model([x[0], x[1], x[2]], training=False)
-                #     outputs = ret[0]
-                #     targets = ret[1]
-                #     loss_value = metrics.xentropy_loss(outputs, targets, x[1], x[2], valid_acc)
-                #     # Track
-                #     valid_loss(loss_value)
-                #
-                # with train_summary_writer.as_default():
-                #     tf.summary.scalar('valid_loss', valid_loss.result(), step=epoch)
-                #     tf.summary.scalar('valid_acc', valid_acc.result(), step=epoch)
-                #
-                # print("Epoch {:03d}: Valid loss: {:.3f}, Valid Acc: {:.3f}".format(epoch, valid_loss.result(), valid_acc.result()), flush=True)
                 save_path = manager.save()
+                print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path), flush=True)
 
                 if fitb_res > max_valid:
                     max_valid = fitb_res
 
-                print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path), flush=True)
+                if on_epoch_end is not None:
+                    for callback in on_epoch_end:
+                        callback(model, fitb_res, epoch)
+
+                if "early_stop" in self.params and self.params["early_stop"]:
+                    if early_stopping_monitor.should_stop(fitb_res, 2):
+                        print("Stopped the training early. Validation accuracy hasn't improved for {} epochs".format(
+                            self.params["early_stop_patience"]))
+                        break
 
         save_path = manager.save()
         print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path))
@@ -303,6 +297,10 @@ def main():
                         action='store_true')
     parser.add_argument("--category-file", type=str, help="Path to polyvore outfits categories")
     parser.add_argument("--categorywise-train", help="Compute loss function only between items from the same category",
+                        action='store_true')
+    parser.add_argument("--early-stop-patience", type=int, help="Number of epochs to wait for improvement", default=5)
+    parser.add_argument("--early-stop-delta", type=float, help="Minimum change to qualify as improvement", default=1)
+    parser.add_argument("--early-stop", help="Enable early stopping",
                         action='store_true')
 
     args = parser.parse_args()
