@@ -23,6 +23,9 @@ BASE = {
     "with_category_grouping": True,
     "with_mask_category_embedding": True,
     "categorywise_train": True,
-    "early_stop_patience": 5,
-    "early_stop_delta": 1
+    "early_stop_patience": 8,
+    "early_stop_delta": 0.002,
+    "early_stop": True,
+    "with_cnn": False,
+    "target_gradient_from": 0
 }

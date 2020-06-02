@@ -401,22 +401,21 @@ class FashionEncoder(tf.keras.Model):
 
             # Calculate attention bias for encoder self-attention and decoder
             # multi-headed attention layers.
-            reduced_inputs = tf.equal(categories, 0)   #TODO
+            # reduced_inputs = tf.equal(categories, 0)   #TODO
             #reduced_inputs = tf.reduce_all(reduced_inputs, axis=2)
 
-            attention_bias = model_utils.get_padding_bias(categories, True)
+            attention_bias = model_utils.get_padding_bias(categories, 0)
 
+            # TODO: Code for keys from categories
             one_hot_categories = tf.one_hot(categories, self.params["categories_count"])
 
             if self.params["mode"] == "debug":
-                logger.debug("Reduces inputs")
-                logger.debug(reduced_inputs)
                 logger.debug("Categories")
                 logger.debug(categories)
                 logger.debug("One hot")
                 logger.debug(one_hot_categories)
 
-            output = self.encode(inputs, one_hot_categories, attention_bias, training)
+            output = self.encode(inputs, categories, attention_bias, training)
 
             # if self.params["hidden_size"] != self.params["feature_dim"]:
             #     output = self.output_dense(output, training=training)
@@ -435,7 +434,6 @@ class FashionEncoder(tf.keras.Model):
           float tensor with shape [batch_size, input_length, hidden_size]
         """
         with tf.name_scope("encode"):
-            inputs_padding = model_utils.get_padding(categories)
             attention_bias = tf.cast(attention_bias, self.params["dtype"])
             encoder_inputs = inputs
 
@@ -444,7 +442,7 @@ class FashionEncoder(tf.keras.Model):
                     encoder_inputs, rate=self.params["layer_postprocess_dropout"])
 
             return self.encoder_stack(
-                encoder_inputs, categories, attention_bias, inputs_padding, training=training)
+                encoder_inputs, categories, attention_bias, training=training)
 
 
 class PrePostProcessingWrapper(tf.keras.layers.Layer):
@@ -561,15 +559,13 @@ class EncoderStack(tf.keras.layers.Layer):
             "params": self.params,
         }
 
-    def call(self, encoder_inputs, categories, attention_bias, inputs_padding, training):
+    def call(self, encoder_inputs, categories, attention_bias, training):
         """Return the output of the encoder layer stacks.
 
         Args:
           encoder_inputs: tensor with shape [batch_size, input_length, hidden_size]
           attention_bias: bias for the encoder self-attention layer. [batch_size, 1,
             1, input_length]
-          inputs_padding: tensor with shape [batch_size, input_length], inputs with
-            zero paddings.
           training: boolean, whether in training mode or not.
 
         Returns:
@@ -584,7 +580,7 @@ class EncoderStack(tf.keras.layers.Layer):
             with tf.name_scope("layer_%d" % n):
                 with tf.name_scope("self_attention"):
                     encoder_inputs = self_attention_layer(
-                        encoder_inputs, categories, attention_bias, training=training)
+                        encoder_inputs, None, attention_bias, training=training)  # TODO: Categories set to None
                 with tf.name_scope("ffn"):
                     encoder_inputs = feed_forward_network(
                         encoder_inputs, training=training)
