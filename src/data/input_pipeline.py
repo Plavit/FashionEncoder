@@ -42,7 +42,7 @@ def append_targets(features, categories, token_pos):
 
 def add_random_mask_positions(features, categories):
     seq_length = tf.shape(categories)[0]
-    random_position = tf.random.uniform((1,), minval=0, maxval=seq_length, dtype="int32", seed=123)
+    random_position = tf.random.uniform((1,), minval=0, maxval=seq_length, dtype="int32", seed=1)
     token_positions = tf.expand_dims(random_position, 0)
     return features, categories, token_positions
 
@@ -58,7 +58,7 @@ def get_training_dataset(filenames, batch_size, with_features, category_lookup=N
     outfits = outfits.cache()
 
     outfits = outfits.map(add_random_mask_positions, tf.data.experimental.AUTOTUNE)
-    outfits = outfits.shuffle(20000, 123)
+    outfits = outfits.shuffle(20000, 1)
 
     if with_features:
         outfits = outfits.padded_batch(batch_size, ([None, 2048], [None], [None, 1]), drop_remainder=True)

@@ -69,13 +69,13 @@ class FashionPreprocessorV2(tf.keras.Model):
         super(FashionPreprocessorV2, self).__init__(name=name)
         self.params = params
 
-        self.tokens_embedding = tf.keras.layers.Embedding(input_dim=params["categories_count"],
-                                                          output_dim=self.params["hidden_size"],
-                                                          name="tokens_embedding")
-        self.general_mask_id = tf.constant([0])
-
         if params["with_cnn"]:
             self.cnn_extractor = CNNExtractor(params, "cnn_extractor")
+
+        if self.params["masking_mode"] == "single-token":
+            self.masking_layer = layers.SingleMasking(params)
+        elif self.params["masking_mode"] == "category-masking":
+            self.masking_layer = layers.CategoryMasking(params)
 
         if params["category_embedding"]:
             if params["category_merge"] == "add":
@@ -89,31 +89,9 @@ class FashionPreprocessorV2(tf.keras.Model):
                                         input_shape=(None, None, self.params["feature_dim"]), name="dense_input")
         self.input_dense = DenseLayerWrapper(i_dense, params)
 
-    def _place_mask_token(self, inputs, categories, mask_positions):
-        logger = tf.get_logger()
-
-        with tf.name_scope("Masking"):
-            cat_indices = tf.reshape(mask_positions, (-1, 1))
-            mask_categories = tf.gather_nd(categories, mask_positions, batch_dims=1)
-            mask_categories = tf.reshape(mask_categories, (-1, 1))
-            if self.params["mode"] == "debug":
-                logger.debug("Categories")
-                logger.debug(categories)
-                logger.debug("Category indices")
-                logger.debug(cat_indices)
-                logger.debug("Mask category")
-                logger.debug(mask_categories)
-            # Get mask token embeddings based on category
-            mask_tensor = self.tokens_embedding(mask_categories)
-            mask_tensor = tf.squeeze(mask_tensor, axis=[1])
-            if self.params["mode"] == "debug":
-                logger.debug("Mask tensor")
-                logger.debug(mask_tensor)
-
-            # Replace actual embedding with mask token embeddings
-            masked_inputs = utils.place_tensor_on_positions(inputs, mask_tensor, mask_positions, repeated=False)
-
-        return masked_inputs
+        target_dense = tf.keras.layers.Dense(self.params["hidden_size"], activation=lambda x: tf.nn.leaky_relu(x),
+                                             input_shape=(None, None, self.params["feature_dim"]), name="dense_target")
+        self.target_dense = DenseLayerWrapper(target_dense, params)
 
     def _add_category_embedding(self, inputs, categories, mask_positions):
         return self.category_embedding([inputs, categories, mask_positions])
@@ -148,23 +126,26 @@ class FashionPreprocessorV2(tf.keras.Model):
         if self.params["with_cnn"]:
             inputs = self.cnn_extractor([inputs, categories, mask_positions])
 
-        inputs = self.input_dense(inputs, training=training)
+        training_targets = self.target_dense(inputs, training=training)
+        masked_inputs = self.input_dense(inputs, training=training)
+
+        # Place mask tokens
+        if mask_positions is not None:
+            masked_inputs = self.masking_layer([masked_inputs, categories, mask_positions])
+            if self.params["mode"] == "debug":
+                logger.debug("Masked Inputs")
+                logger.debug(masked_inputs)
 
         # Merge image features with category embedding
         if self.params["category_embedding"]:
-            inputs = self._add_category_embedding(inputs, categories, None)
+            training_targets = self._add_category_embedding(training_targets, categories, None)
+            masked_inputs = self._add_category_embedding(masked_inputs, categories, mask_positions)
 
-        if self.params["mode"] == "debug":
-            logger.debug("Inputs with categories")
-            logger.debug(inputs)
+            if self.params["mode"] == "debug":
+                logger.debug("Masked inputs with categories")
+                logger.debug(masked_inputs)
 
-        # Place mask tokens
-        if self.params["masking_mode"] == "single-token" and mask_positions is not None:
-            masked_inputs = self._place_mask_token(inputs, categories, mask_positions)
-        else:
-            masked_inputs = inputs
-
-        return masked_inputs, inputs
+        return masked_inputs, training_targets
 
 
 class FashionPreprocessor(tf.keras.Model):
@@ -181,7 +162,7 @@ class FashionPreprocessor(tf.keras.Model):
 
         self.tokens_embedding = tf.keras.layers.Embedding(input_dim=1,
                                                           output_dim=self.params["feature_dim"],
-                                                          name="tokens_embedding",embeddings_initializer="ones")
+                                                          name="tokens_embedding", embeddings_initializer="ones")
         self.general_mask_id = tf.constant([0])
 
         if params["with_cnn"]:

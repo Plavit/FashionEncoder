@@ -1,10 +1,77 @@
-
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 import src.models.encoder.utils as utils
 import tensorflow as tf
 from official.nlp import bert_modeling as common_layer
+
+
+class SingleMasking(tf.keras.layers.Layer):
+
+    def __init__(self, params):
+        super(SingleMasking, self).__init__()
+        self.params = params
+
+        self.tokens_embedding = tf.keras.layers.Embedding(input_dim=1,
+                                                          output_dim=self.params["hidden_size"],
+                                                          name="tokens_embedding")
+        self.token_id = tf.constant([0])
+
+    def __call__(self, inputs, *args, **kwargs):
+        inputs, categories, mask_positions = inputs[0], inputs[1], inputs[2]
+        logger = tf.get_logger()
+
+        with tf.name_scope("Masking"):
+            mask_tensor = self.tokens_embedding(self.token_id)
+            mask_tensor = tf.squeeze(mask_tensor)
+            if self.params["mode"] == "debug":
+                logger.debug("Mask positions")
+                logger.debug(mask_positions)
+                logger.debug("Mask tensor")
+                logger.debug(mask_tensor)
+
+            masked_inputs = utils.place_tensor_on_positions(inputs, mask_tensor, mask_positions)
+
+        return masked_inputs
+
+
+class CategoryMasking(tf.keras.layers.Layer):
+
+    def __init__(self, params):
+        super(CategoryMasking, self).__init__()
+        self.params = params
+
+        self.tokens_embedding = tf.keras.layers.Embedding(input_dim=params["categories_count"],
+                                                          output_dim=self.params["hidden_size"],
+                                                          name="tokens_embedding")
+
+    def __call__(self, inputs, *args, **kwargs):
+        inputs, categories, mask_positions = inputs[0], inputs[1], inputs[2]
+        logger = tf.get_logger()
+
+        with tf.name_scope("Masking"):
+            cat_indices = tf.reshape(mask_positions, (-1, 1))
+            mask_categories = tf.gather_nd(categories, mask_positions, batch_dims=1)
+            mask_categories = tf.reshape(mask_categories, (-1, 1))
+            if self.params["mode"] == "debug":
+                logger.debug("Categories")
+                logger.debug(categories)
+                logger.debug("Category indices")
+                logger.debug(cat_indices)
+                logger.debug("Mask category")
+                logger.debug(mask_categories)
+            # Get mask token embeddings based on category
+            mask_tensor = self.tokens_embedding(mask_categories)
+            mask_tensor = tf.squeeze(mask_tensor, axis=[1])
+            if self.params["mode"] == "debug":
+                logger.debug("Mask tensor")
+                logger.debug(mask_tensor)
+
+            # Replace actual embedding with mask token embeddings
+            masked_inputs = utils.place_tensor_on_positions(inputs, mask_tensor, mask_positions, repeated=False)
+
+        return masked_inputs
+
 
 class CategoryAdder(tf.keras.layers.Layer):
 
@@ -39,8 +106,8 @@ class CategoryAdder(tf.keras.layers.Layer):
 
             embedded_categories = self.category_embedding(flat_categories)
             embedded_categories = tf.squeeze(embedded_categories, axis=1)
-            embedded_categories = tf.einsum("ij,jk->ik", mask_matrix, embedded_categories)
-            embedded_categories = tf.reshape(embedded_categories,
+            embedded_categories = tf.einsum("ij,jk->ik", mask_matrix, embedded_categories)  # Apply mask
+            embedded_categories = tf.reshape(embedded_categories,  # Reshape to the initial shape
                                              shape=(batch_size, seq_length, self.params["category_dim"]))
 
             # Replace mask category embedding with zero tensor
@@ -69,9 +136,9 @@ class CategoryMultiplier(tf.keras.layers.Layer):
                                                                 embeddings_initializer="ones",
                                                                 trainable=True)
 
-        if params["feature_dim"] != params["category_dim"]:
-            raise RuntimeError("'feature_dim' must match 'category_dim' when category_merge is set to 'add' or "
-                               "'multiply'")
+        # if params["feature_dim"] != params["category_dim"]:
+        #     raise RuntimeError("'feature_dim' must match 'category_dim' when category_merge is set to 'add' or "
+        #                        "'multiply'")
 
     def __call__(self, inputs, *args, **kwargs):
         with tf.name_scope("category-multiplier"):
@@ -164,9 +231,6 @@ class CategoryConcater(tf.keras.layers.Layer):
                 logger.debug(embedded_categories)
 
             return tf.keras.layers.concatenate([inputs, embedded_categories])
-
-
-
 
 
 class Attention(tf.keras.layers.Layer):

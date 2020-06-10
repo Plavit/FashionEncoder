@@ -64,7 +64,7 @@ def compute_padding_mask_from_categories(categories):
             There's 0 on the diagonal if the corresponding item should be masked
             There's 1 on the diagonal if the corresponding item should not be masked
     """
-    # Compute padding mask # TODO: Make function out of this
+    # Compute padding mask
     unpacked_categories = tf.reshape(categories, shape=[-1])
     unpacked_length = tf.shape(unpacked_categories)[0]
     padding_mask = tf.equal(unpacked_categories, 0)
@@ -81,6 +81,7 @@ def place_tensor_on_positions(inputs, tensor_to_place, positions, repeated=True)
         repeated = tf.repeat(tensor_to_place, tf.shape(positions)[0])
         # Reshape to (number of masked items, feature_dim)
         updates = tf.reshape(repeated, shape=(-1, tf.shape(tensor_to_place)[0]))
+
     else:
         updates = tensor_to_place
     r = tf.range(0, limit=tf.shape(positions)[0], dtype="int32")

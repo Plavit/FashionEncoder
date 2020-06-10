@@ -13,8 +13,7 @@ class FashionModelTuner(kt.Tuner):
         params = model.get_layer("fashion_encoder").params
 
         if "checkpoint_dir" in params:
-            del params["checkpoint_dir"]  # Keras Tuner evidently reuses the same model
-            # TODO: Do not set parameters during training
+            del params["checkpoint_dir"]  # TODO: Do not set parameters during training
 
         task = EncoderTask(params)
         print(params, flush=True)
@@ -27,7 +26,7 @@ def build(hp: kt.HyperParameters):
 
     params["learning_rate"] = hp.Choice("learning_rate", [0.005, 0.001, 0.0005, 0.0001], default=0.0005)
     params["hidden_size"] = hp.Choice("hidden_size", [32, 64, 128, 256], default=128)
-    params["num_hidden_layers"] = hp.Int("num_hidden_layers", 1, 3, 1, default=1)
+    params["num_hidden_layers"] = hp.Int("num_hidden_layers", 1, 4, 1, default=1)
     params["num_heads"] = hp.Choice("num_heads", [1, 2, 4, 8, 16, 32], default=8)
     params["filter_size"] = hp.Int("filter_size", 32, 512, 64, default=128)
     params["batch_size"] = hp.Int("batch_size", 32, 256, 1, "log", default=128)
@@ -49,7 +48,7 @@ def main():
     hp = kt.HyperParameters()
     hp.Fixed('num_heads', value=16)
     hp.Fixed('hidden_size', value=128)
-    hp.Fixed('filter_size', value=512)
+    hp.Fixed('filter_size', value=128)
     hp.Fixed('num_hidden_layers', value=1)
     hp.Fixed('category_merge', value="add")
 
@@ -63,7 +62,7 @@ def main():
             hyperparameters=hp
         ),
         hypermodel=build,
-        project_name="fashion_encoder_training_params",
+        project_name="fashion_encoder_training_" + current_time,
         directory="tuner_results"
     )
 

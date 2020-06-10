@@ -64,9 +64,8 @@ class EncoderTask:
         train_log_dir = 'logs/' + current_time + '/debug'
         debug_summary_writer = tf.summary.create_file_writer(train_log_dir)
 
-        train_dataset, test_dataset, fitb_dataset = self.get_datasets()
+        train_dataset, fitb_dataset = self.get_datasets()
         train_dataset = train_dataset.take(1)
-        test_dataset = test_dataset.take(1)
         fitb_dataset = fitb_dataset.take(1)
 
         logger.debug("-------------- FITB TRACE --------------")
@@ -99,26 +98,6 @@ class EncoderTask:
         with debug_summary_writer.as_default():
             tf.summary.trace_export(
                 name="train_metrics_trace",
-                step=0)
-
-        logger.debug("-------------- VALID TRACE --------------")
-        inputs, targets = tf.data.experimental.get_single_element(test_dataset)
-        tf.summary.trace_on(graph=True)
-        ret = EncoderTask.train_step(model, inputs[0], inputs[1], inputs[2])
-        with debug_summary_writer.as_default():
-            tf.summary.trace_export(
-                name="valid_trace",
-                step=0)
-
-        logger.debug("-------------- VALID METRICS TRACE --------------")
-        outputs = ret[0]
-        targets = ret[1]
-        tf.summary.trace_on(graph=True)
-        metrics.xentropy_loss(outputs, targets, inputs[1], inputs[2], debug=True,
-                              categorywise_only=self.params["categorywise_train"])
-        with debug_summary_writer.as_default():
-            tf.summary.trace_export(
-                name="valid_metrics_trace",
                 step=0)
 
     @staticmethod
@@ -164,10 +143,6 @@ class EncoderTask:
         if on_epoch_end is None:
             on_epoch_end = []
 
-        # Create the model
-        model = fashion_enc.create_model(self.params, True)
-        model.summary()
-
         train_dataset, fitb_dataset = self.get_datasets()
 
         num_epochs = self.params["epoch_count"]
@@ -180,6 +155,12 @@ class EncoderTask:
         batch_number = 0
         if "checkpoint_dir" not in self.params:
             self.params["checkpoint_dir"] = "./logs/" + current_time + "/tf_ckpts"
+
+        # Create the model
+        model = fashion_enc.create_model(self.params, True)
+        model.summary()
+
+        test_model = fashion_enc.create_model(self.params, False)
 
         # Threshold of valid acc when target gradient is not stopped
         max_valid = 0
@@ -233,7 +214,9 @@ class EncoderTask:
                                                                    categorical_acc.result()))
 
             if epoch % 2 == 0:
-                fitb_res = self.fitb(model, fitb_dataset, epoch)
+                weights = model.get_weights()
+                test_model.set_weights(weights)
+                fitb_res = self.fitb(test_model, fitb_dataset, epoch)
                 print("Epoch {:03d}: FITB Acc: {:.3f}".format(epoch, fitb_res), flush=True)
 
                 with train_summary_writer.as_default():
@@ -273,7 +256,8 @@ def main():
     parser.add_argument("--num-heads", type=int, help="Number of heads")
     parser.add_argument("--num-hidden-layers", type=int, help="Number of hidden layers")
     parser.add_argument("--checkpoint-dir", type=str, help="Checkpoint directory")
-    parser.add_argument("--masking-mode", type=str, help="Mode of sequence masking", choices=["single-token"])
+    parser.add_argument("--masking-mode", type=str, help="Mode of sequence masking",
+                        choices=["single-token", "category-masking"])
     parser.add_argument("--learning-rate", type=float, help="Optimizer's learning rate")
     parser.add_argument("--valid-batch-size", type=int,
                         help="Batch size of validation dataset (by default the same as batch size)")

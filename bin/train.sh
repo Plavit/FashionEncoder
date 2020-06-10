@@ -1,32 +1,31 @@
 #!/usr/bin/env bash
 
-python -m "src.models.encoder.param_tuning"
+#python -m "src.models.encoder.param_tuning"
 
-#python -m "src.models.encoder.encoder_main" \
-#  --dataset-files "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-train-000-1.tfrecord" \
-#  --test-files "/mnt/0/projects/outfit-generation/data/processed/tfrecords/valid-000-1.tfrecord" \
-#  --fitb-file "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-fitb-features-valid.tfrecord" \
-#  --batch-size 128 \
-#  --epoch-count 200 \
-#  --mode "train" \
-#  --hidden-size 1024 \
-#  --filter-size 1024 \
-#  --masking-mode "single-token" \
-#  --num-heads 16 \
-#  --num-hidden-layers 1 \
-#  --learning-rate "0.0005" \
-#  --categories-count 50 \
-#  --category-merge "add" \
-#  --info "PreprocessorV2" \
-#  --category-file "/mnt/0/projects/outfit-generation/data/raw/polyvore_outfits/categories.csv" \
-#  --category-embedding \
-#  --use-mask-category \
-#  --with-category-grouping \
-#  --with-mask-category-embedding \
-#  --categorywise-train \
-#  --early-stop \
-#  --early-stop-patience 4 \
-#  --early-stop-delta 1
+python -m "src.models.encoder.encoder_main" \
+  --dataset-files "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-train-000-1.tfrecord" \
+  --test-files "/mnt/0/projects/outfit-generation/data/processed/tfrecords/valid-000-1.tfrecord" \
+  --fitb-file "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-fitb-features-valid.tfrecord" \
+  --batch-size 128 \
+  --epoch-count 200 \
+  --mode "train" \
+  --hidden-size 128 \
+  --category-dim 128 \
+  --filter-size 128 \
+  --masking-mode "single-token" \
+  --num-heads 16 \
+  --num-hidden-layers 1 \
+  --learning-rate "0.0005" \
+  --categories-count 5000 \
+  --category-merge "add" \
+  --info "Target dense" \
+  --category-file "/mnt/0/projects/outfit-generation/data/raw/polyvore_outfits/categories.csv" \
+  --category-embedding \
+  --use-mask-category \
+  --categorywise-train \
+  --early-stop \
+  --early-stop-patience 6 \
+  --early-stop-delta "0.002"
 
 #python -m "src.models.encoder.encoder_main" \
 #  --dataset-files "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-images-train-000-10.tfrecord" \
@@ -46,7 +45,7 @@ python -m "src.models.encoder.param_tuning"
 #  --mode "train" \
 #  --hidden-size 128 \
 #  --category-dim 128 \
-#  --filter-size 512 \
+#  --filter-size 256 \
 #  --masking-mode "single-token" \
 #  --num-heads 16 \
 #  --valid-batch-size 2 \
@@ -77,23 +76,28 @@ python -m "src.models.encoder.param_tuning"
 #     "/mnt/0/projects/outfit-generation/data/processed/tfrecords/train-008-10.tfrecord" \
 #     "/mnt/0/projects/outfit-generation/data/processed/tfrecords/train-009-10.tfrecord" \
 #  --test-files "/mnt/0/projects/outfit-generation/data/processed/tfrecords/valid-000-1.tfrecord" \
-#  --fitb-file "/mnt/0/projects/outfit-generation/data/processed/tfrecords/fitb-valid.tfrecord" \
+#  --fitb-file "/mnt/0/projects/outfit-generation/data/processed/tfrecords/fitb-features.tfrecord" \
 #  --batch-size 128 \
 #  --epoch-count 200 \
 #  --mode "train" \
-#  --hidden-size 512 \
-#  --filter-size 512 \
+#  --hidden-size 128 \
+#  --category-dim 128 \
+#  --filter-size 128 \
 #  --masking-mode "single-token" \
 #  --num-heads 16 \
 #  --valid-batch-size 2 \
 #  --num-hidden-layers 1 \
 #  --learning-rate "0.0005" \
-#  --categories-count 10 \
-#  --with-category-grouping \
+#  --categories-count 5000 \
+#  --target-gradient-from 30 \
 #  --category-embedding \
+#  --with-category-grouping \
 #  --category-merge "add" \
-#  --target-gradient-from 60 \
-#  --info "Only one dense layer"
+#  --target-gradient-from 0 \
+#  --info "Polyvore Maryland - with model" \
+#  --early-stop \
+#  --early-stop-patience 6 \
+#  --early-stop-delta "0.002"
 
 #python -m "src.models.encoder.encoder_main" \
 #  --dataset-files "/mnt/0/projects/outfit-generation/data/processed/tfrecords/debug-cleaned-raw-000-1.tfrecord" \
