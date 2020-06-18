@@ -15,18 +15,22 @@ class EncoderTask:
     def __init__(self, params):
         self.params = params
 
-    @staticmethod
-    def fitb(model, dataset, epoch):
-        acc = tf.metrics.CategoricalAccuracy()
-        mask = tf.constant([[[0]]])  # FITB mask token is placed at 0th index
+    def fitb(self, model, dataset, epoch):
+        if self.params["loss"] == "cross":
+            acc = tf.metrics.CategoricalAccuracy()
+        elif self.params["loss"] == "distance":
+            acc = tf.metrics.Accuracy()
+        else:
+            raise RuntimeError("Unexpected loss function")
+
+        mask = tf.constant([[[0]]], dtype=tf.int32)  # FITB mask token is placed at 0th index
         preprocessor = model.get_layer("preprocessor")
 
         for task in dataset:
-            EncoderTask.fitb_step(model, preprocessor, task, mask, acc)
+            self.fitb_step(model, preprocessor, task, mask, acc)
         return acc.result()
 
-    @staticmethod
-    def fitb_step(model, preprocessor, task, mask, acc=None):
+    def fitb_step(self, model, preprocessor, task, mask, acc=None):
         logger = tf.get_logger()
         inputs, input_categories, targets, target_categories, target_position = task
         logger.debug("Targets")
@@ -40,7 +44,14 @@ class EncoderTask:
         logger.debug("Outputs")
         logger.debug(outputs)
 
-        metrics.fitb_acc(outputs, targets, mask, target_position, input_categories, acc)
+        debug = self.params["mode"] == "debug"
+
+        if self.params["loss"] == "cross":
+            metrics.fitb_acc(outputs, targets, mask, target_position, input_categories, acc, debug)
+        elif self.params["loss"] == "distance":
+            metrics.outfit_distance_fitb(outputs, targets, mask, target_position, input_categories, acc, debug)
+        else:
+            raise RuntimeError("Unexpected loss function")
 
     def debug(self):
         # Create the model
@@ -73,8 +84,15 @@ class EncoderTask:
         preprocessor = model.get_layer("preprocessor")
         task = tf.data.experimental.get_single_element(fitb_dataset)
 
+        if self.params["loss"] == "cross":
+            acc = tf.metrics.CategoricalAccuracy()
+        elif self.params["loss"] == "distance":
+            acc = tf.metrics.Accuracy()
+        else:
+            raise RuntimeError("Unexpected loss function")
+
         tf.summary.trace_on(graph=True)
-        EncoderTask.fitb_step(model, preprocessor, task, mask)
+        self.fitb_step(model, preprocessor, task, mask, acc)
         with debug_summary_writer.as_default():
             tf.summary.trace_export(
                 name="fitb_trace",
@@ -93,8 +111,18 @@ class EncoderTask:
         outputs = ret[0]
         targets = ret[1]
         tf.summary.trace_on(graph=True)
-        metrics.xentropy_loss(outputs, targets, inputs[1], inputs[2], debug=True,
-                              categorywise_only=self.params["categorywise_train"])
+
+        if self.params["loss"] == "cross":
+            acc = tf.metrics.CategoricalAccuracy()
+            metrics.xentropy_loss(outputs, tf.stop_gradient(targets), inputs[1], inputs[2],
+                                  categorywise_only=self.params["categorywise_train"], debug=True,acc=acc)
+        elif self.params["loss"] == "distance":
+            acc = tf.metrics.Accuracy()
+            metrics.outfit_distance_loss(
+                outputs, tf.stop_gradient(targets), inputs[1], inputs[2], self.params["margin"], debug=True, acc=acc)
+        else:
+            raise RuntimeError("Unexpected loss function")
+
         with debug_summary_writer.as_default():
             tf.summary.trace_export(
                 name="train_metrics_trace",
@@ -109,15 +137,19 @@ class EncoderTask:
         with tf.GradientTape() as tape:
             ret = EncoderTask.train_step(model, inputs[0], inputs[1], inputs[2])
             outputs = ret[0]
-            targets = ret[1]
-            if stop_targets_gradient:
+            targets = tf.stop_gradient(targets) if stop_targets_gradient else ret[1]
+            if self.params["loss"] == "cross":
                 loss_value = metrics.xentropy_loss(
                     outputs, tf.stop_gradient(targets),
                     inputs[1], inputs[2], acc, categorywise_only=self.params["categorywise_train"]) / num_replicas
+            elif self.params["loss"] == "distance":
+                loss_value = metrics.outfit_distance_loss(
+                    outputs, tf.stop_gradient(targets), inputs[1], inputs[2], self.params["margin"], acc) \
+                             / num_replicas
+                loss_value += tf.add_n(model.losses)
             else:
-                loss_value = metrics.xentropy_loss(
-                    outputs, targets,
-                    inputs[1], inputs[2], acc, categorywise_only=self.params["categorywise_train"]) / num_replicas
+                raise RuntimeError("Unexpected loss function")
+
         grad = tape.gradient(loss_value, model.trainable_variables)
         return loss_value, grad
 
@@ -180,7 +212,12 @@ class EncoderTask:
         for epoch in range(1, num_epochs + 1):
             epoch_loss_avg = tf.keras.metrics.Mean('epoch_loss')
             train_loss = tf.keras.metrics.Mean('train_loss', dtype=tf.float32)
-            categorical_acc = tf.metrics.CategoricalAccuracy()
+            if self.params["loss"] == "cross":
+                acc = tf.metrics.CategoricalAccuracy()
+            elif self.params["loss"] == "distance":
+                acc = tf.metrics.Accuracy()
+            else:
+                raise RuntimeError("Unexpected loss function")
 
             # Training loop
             for x, y in train_dataset:
@@ -188,11 +225,11 @@ class EncoderTask:
 
                 # Optimize the model
                 if self.params["target_gradient_from"] == -1:
-                    loss_value, grads = self._grad(model, x, y, categorical_acc, stop_targets_gradient=False)
+                    loss_value, grads = self._grad(model, x, y, acc, stop_targets_gradient=False)
                 elif max_valid < self.params["target_gradient_from"]:
-                    loss_value, grads = self._grad(model, x, y, categorical_acc)
+                    loss_value, grads = self._grad(model, x, y, acc)
                 else:
-                    loss_value, grads = self._grad(model, x, y, categorical_acc, stop_targets_gradient=False)
+                    loss_value, grads = self._grad(model, x, y, acc, stop_targets_gradient=False)
 
                 optimizer.apply_gradients(zip(grads, model.trainable_variables))
 
@@ -204,14 +241,14 @@ class EncoderTask:
 
                 with train_summary_writer.as_default():
                     tf.summary.scalar('loss', train_loss.result(), step=batch_number)
-                    tf.summary.scalar('batch_acc', categorical_acc.result(), step=batch_number)
+                    tf.summary.scalar('batch_acc', acc.result(), step=batch_number)
 
             with train_summary_writer.as_default():
                 tf.summary.scalar('epoch_loss', epoch_loss_avg.result(), step=epoch)
-                tf.summary.scalar('epoch_acc', categorical_acc.result(), step=epoch)
+                tf.summary.scalar('epoch_acc', acc.result(), step=epoch)
 
             print("Epoch {:03d}: Loss: {:.3f}, Acc: {:.3f}".format(epoch, epoch_loss_avg.result(),
-                                                                   categorical_acc.result()))
+                                                                   acc.result()))
 
             if epoch % 2 == 0:
                 weights = model.get_weights()
@@ -286,6 +323,9 @@ def main():
     parser.add_argument("--early-stop-delta", type=float, help="Minimum change to qualify as improvement", default=1)
     parser.add_argument("--early-stop", help="Enable early stopping",
                         action='store_true')
+    parser.add_argument("--loss", type=str, help="Loss function", choices=["cross", "distance"],
+                        default="cross")
+    parser.add_argument("--margin", type=float, help="Margin of distance loss function", default=0.3)
 
     args = parser.parse_args()
 

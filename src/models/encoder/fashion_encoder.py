@@ -89,9 +89,9 @@ class FashionPreprocessorV2(tf.keras.Model):
                                         input_shape=(None, None, self.params["feature_dim"]), name="dense_input")
         self.input_dense = DenseLayerWrapper(i_dense, params)
 
-        target_dense = tf.keras.layers.Dense(self.params["hidden_size"], activation=lambda x: tf.nn.leaky_relu(x),
-                                             input_shape=(None, None, self.params["feature_dim"]), name="dense_target")
-        self.target_dense = DenseLayerWrapper(target_dense, params)
+        # target_dense = tf.keras.layers.Dense(self.params["hidden_size"], activation=lambda x: tf.nn.leaky_relu(x),
+        #                                      input_shape=(None, None, self.params["feature_dim"]), name="dense_target")
+        # self.target_dense = DenseLayerWrapper(target_dense, params)
 
     def _add_category_embedding(self, inputs, categories, mask_positions):
         return self.category_embedding([inputs, categories, mask_positions])
@@ -126,7 +126,7 @@ class FashionPreprocessorV2(tf.keras.Model):
         if self.params["with_cnn"]:
             inputs = self.cnn_extractor([inputs, categories, mask_positions])
 
-        training_targets = self.target_dense(inputs, training=training)
+        training_targets = self.input_dense(inputs, training=training)  # TODO: Target dense?
         masked_inputs = self.input_dense(inputs, training=training)
 
         # Place mask tokens
@@ -290,7 +290,7 @@ class CNNExtractor(tf.keras.Model):
 
     def call(self, inputs):
         """
-        TODO
+        TODO: Documement
         Args:
             inputs: tuple (inputs, categories, mask_positions)
               inputs - tensor of shape (batch_size, seq_length, 299, 299, 3)
@@ -342,6 +342,7 @@ class FashionEncoder(tf.keras.Model):
         o_dense = tf.keras.layers.Dense(units, activation=lambda x: tf.nn.leaky_relu(x),
                                         name="dense_output")
         self.output_dense = DenseLayerWrapper(o_dense, params)
+        self.regularizer = tf.keras.regularizers.l2()
 
     def get_config(self):
         return {
@@ -382,7 +383,7 @@ class FashionEncoder(tf.keras.Model):
 
             # Calculate attention bias for encoder self-attention and decoder
             # multi-headed attention layers.
-            # reduced_inputs = tf.equal(categories, 0)   #TODO
+            # reduced_inputs = tf.equal(categories, 0)   #TODO: Is this needed?
             #reduced_inputs = tf.reduce_all(reduced_inputs, axis=2)
 
             attention_bias = model_utils.get_padding_bias(categories, 0)
@@ -400,6 +401,8 @@ class FashionEncoder(tf.keras.Model):
 
             # if self.params["hidden_size"] != self.params["feature_dim"]:
             #     output = self.output_dense(output, training=training)
+
+            self.add_loss(self.regularizer(output))
 
             return output
 
