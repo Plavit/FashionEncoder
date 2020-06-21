@@ -6,7 +6,7 @@ python -m "src.models.encoder.encoder_main" \
   --dataset-files "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-train-000-1.tfrecord" \
   --test-files "/mnt/0/projects/outfit-generation/data/processed/tfrecords/valid-000-1.tfrecord" \
   --fitb-file "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-fitb-features-valid.tfrecord" \
-  --batch-size 16 \
+  --batch-size 128 \
   --epoch-count 200 \
   --mode "debug" \
   --hidden-size 128 \
@@ -15,20 +15,22 @@ python -m "src.models.encoder.encoder_main" \
   --masking-mode "single-token" \
   --num-heads 16 \
   --num-hidden-layers 1 \
-  --learning-rate "0.001" \
+  --learning-rate "0.0005" \
   --categories-count 5000 \
   --category-merge "add" \
-  --info "Reg, mean" \
+  --info "Without reg, fixed mask" \
   --category-file "/mnt/0/projects/outfit-generation/data/raw/polyvore_outfits/categories.csv" \
   --category-embedding \
   --with-category-grouping \
   --use-mask-category \
   --categorywise-train \
   --early-stop \
-  --early-stop-patience 6 \
+  --early-stop-patience 10 \
   --early-stop-delta "0.002" \
-  --loss "distance" \
-  --checkpoint-dir "/mnt/0/projects/outfit-generation/logs/20200614-215023/tf_ckpts/ckpt-11"
+  --loss "cross" \
+  --margin "0.5" \
+  --with-mask-category-embedding \
+  --checkpoint-dir "/mnt/0/projects/outfit-generation/logs/20200621-131422/tf_ckpts/"
 
 #python -m "src.models.encoder.encoder_main" \
 #  --dataset-files "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-images-train-000-10.tfrecord" \
@@ -48,7 +50,7 @@ python -m "src.models.encoder.encoder_main" \
 #  --mode "train" \
 #  --hidden-size 128 \
 #  --category-dim 128 \
-#  --filter-size 256 \
+#  --filter-size 128 \
 #  --masking-mode "single-token" \
 #  --num-heads 16 \
 #  --valid-batch-size 2 \

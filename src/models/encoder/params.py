@@ -27,5 +27,12 @@ BASE = {
     "early_stop_delta": 0.002,
     "early_stop": True,
     "with_cnn": False,
-    "target_gradient_from": 0
+    "target_gradient_from": 0,
+    "loss": "cross"
 }
+
+DISTANCE_BASE = BASE.copy()
+DISTANCE_BASE.update(
+    loss="distance",
+    margin="0.5"
+)

@@ -76,18 +76,25 @@ def compute_padding_mask_from_categories(categories):
 
 
 def place_tensor_on_positions(inputs, tensor_to_place, positions, repeated=True):
+    logger = tf.get_logger()
     if repeated:
+        repeated = tf.expand_dims(tensor_to_place, 0)
         # Repeat the tensor_to_place to match the count of positions
-        repeated = tf.repeat(tensor_to_place, tf.shape(positions)[0])
+        repeated = tf.tile(repeated, [tf.shape(positions)[0], 1])
         # Reshape to (number of masked items, feature_dim)
         updates = tf.reshape(repeated, shape=(-1, tf.shape(tensor_to_place)[0]))
-
+        logger.debug("Updates")
+        logger.debug(updates)
     else:
         updates = tensor_to_place
+        logger.debug("Updates")
+        logger.debug(updates)
     r = tf.range(0, limit=tf.shape(positions)[0], dtype="int32")
     r = tf.reshape(r, shape=[tf.shape(r)[0], -1, 1])
     indices = tf.concat([r, positions], axis=-1)
     indices = tf.squeeze(indices, axis=[1])
+    logger.debug("indices")
+    logger.debug(indices)
     return tf.tensor_scatter_nd_update(inputs, indices, updates)
 
 

@@ -146,7 +146,7 @@ class EncoderTask:
                 loss_value = metrics.outfit_distance_loss(
                     outputs, tf.stop_gradient(targets), inputs[1], inputs[2], self.params["margin"], acc) \
                              / num_replicas
-                loss_value += tf.add_n(model.losses)
+                # loss_value += tf.add_n(model.losses)
             else:
                 raise RuntimeError("Unexpected loss function")
 
@@ -207,7 +207,7 @@ class EncoderTask:
 
         if "early_stop" in self.params and self.params["early_stop"]:
             early_stopping_monitor = utils.EarlyStoppingMonitor(self.params["early_stop_patience"],
-                                                                self.params["early_stop_delta"])
+                                                                self.params["early_stop_delta"], 50)
 
         for epoch in range(1, num_epochs + 1):
             epoch_loss_avg = tf.keras.metrics.Mean('epoch_loss')
@@ -355,7 +355,8 @@ def main():
         "attention_dropout": 0.1,
         "relu_dropout": 0.1,
         "learning_rate": 0.001,
-        "category_dim": 1024
+        "category_dim": 1024,
+        "loss": "cross"
     }
 
     params.update(filtered)

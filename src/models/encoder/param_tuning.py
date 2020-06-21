@@ -27,10 +27,12 @@ def build(hp: kt.HyperParameters):
     params["learning_rate"] = hp.Choice("learning_rate", [0.005, 0.001, 0.0005, 0.0001], default=0.0005)
     params["hidden_size"] = hp.Choice("hidden_size", [32, 64, 128, 256], default=128)
     params["num_hidden_layers"] = hp.Int("num_hidden_layers", 1, 4, 1, default=1)
-    params["num_heads"] = hp.Choice("num_heads", [1, 2, 4, 8, 16, 32], default=8)
+    params["num_heads"] = hp.Choice("num_heads", [1, 2, 4, 8, 16, 32], default=16)
     params["filter_size"] = hp.Int("filter_size", 32, 512, 64, default=128)
     params["batch_size"] = hp.Int("batch_size", 32, 256, 1, "log", default=128)
     params["category_merge"] = hp.Choice("category_merge", ["add", "multiply"], default="add")
+    params["loss"] = hp.Choice("metric", ["cross", "distance"], default="distance")
+    params["margin"] = hp.Choice("margin", [0.1, 0.3, 0.8, 1, 2, 5, 10], default=1)
 
     params["category_dim"] = params["hidden_size"]
     params["mode"] = "train"
@@ -46,11 +48,7 @@ def build(hp: kt.HyperParameters):
 
 def main():
     hp = kt.HyperParameters()
-    hp.Fixed('num_heads', value=16)
-    hp.Fixed('hidden_size', value=128)
-    hp.Fixed('filter_size', value=128)
-    hp.Fixed('num_hidden_layers', value=1)
-    hp.Fixed('category_merge', value="add")
+    hp.Choice("margin", [0.1, 0.3, 0.8, 1.0, 2.0, 5.0, 10.0], default=1)
 
     current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
@@ -58,7 +56,7 @@ def main():
         oracle=kt.oracles.BayesianOptimization(
             objective=kt.Objective("acc", "max"),
             max_trials=30,
-            tune_new_entries=True,
+            tune_new_entries=False,
             hyperparameters=hp
         ),
         hypermodel=build,
