@@ -110,18 +110,21 @@ def fitb_acc(y_pred, y_true, pred_positions, target_position, categories, acc: t
     return logits
 
 
-def distances(a, b):
+def distances(a, b, b_bias=None):
     a = tf.expand_dims(a, 1)
     b = tf.expand_dims(b, 0)
 
     a = tf.tile(a, [1, b.shape[1], 1])
     b = tf.tile(b, [a.shape[0], 1, 1])
 
+    if b_bias is not None:
+        b = tf.add(b, b_bias)
+
     sub = a - b
     return tf.math.reduce_euclidean_norm(sub, -1)
 
 
-def get_distances_to_targets(y_pred, y_true, mask_positions, debug=False):
+def get_distances_to_targets(y_pred, y_true, mask_positions, categories, debug=False):
     logger = tf.get_logger()
 
     r = tf.range(0, limit=tf.shape(mask_positions)[0])
@@ -132,8 +135,24 @@ def get_distances_to_targets(y_pred, y_true, mask_positions, debug=False):
 
     predictions = tf.gather_nd(y_pred, indices)
 
-    targets = tf.reshape(y_true, [-1, y_true.shape[-1]])
-    dist = distances(predictions, targets)
+    targets = tf.reshape(y_true, [-1, y_true.shape[-1]])  # (total_count, hidden_size)
+
+    cat_mask = None
+
+    if categories is not None:
+        flat_categories = tf.reshape(categories, [-1])
+        cat_mask = tf.equal(flat_categories[:, tf.newaxis], flat_categories[tf.newaxis, :])
+        cat_mask = tf.logical_not(cat_mask)
+        cat_mask = tf.cast(cat_mask, dtype="float32")
+        cat_mask = cat_mask * _INF_FP32
+        # (batch_size, batch_size, seq_length, 1)
+        cat_mask = tf.reshape(cat_mask, (-1, 1))
+        cat_mask = tf.tile(cat_mask, [1, y_pred[-1]])
+        if debug:
+            logger.debug("Category Mask")
+            logger.debug(cat_mask)
+
+    dist = distances(predictions, targets, cat_mask)
     dist = tf.reshape(dist, (dist.shape[0], y_true.shape[0], -1))  # (batch_size, batch_size, seq_length)
 
     dist_to_pos = tf.gather_nd(dist, indices, 1)  # (batch_size,)
@@ -143,6 +162,7 @@ def get_distances_to_targets(y_pred, y_true, mask_positions, debug=False):
     indices = tf.concat([r, indices], axis=-1)  # (batch_size, 3)
     updates = tf.repeat(tf.constant(tf.float32.max, shape=1), indices.shape[0])
     dist_to_neg = tf.tensor_scatter_nd_update(dist, indices, updates)
+
     dist_to_neg = tf.math.reduce_min(dist_to_neg, axis=[-2, -1])  # (batch_size,)
     # TODO: Mean aggregation?
 
@@ -170,7 +190,7 @@ def outfit_distance_loss(y_pred, y_true, categories, mask_positions, margin, acc
     max_tensor = tf.tile(max_tensor, [padding_indices.shape[0], 1])
     y_true = tf.tensor_scatter_nd_update(y_true, padding_indices, max_tensor)
 
-    dist_to_pos, dist_to_neg = get_distances_to_targets(y_pred, y_true, mask_positions, debug)
+    dist_to_pos, dist_to_neg = get_distances_to_targets(y_pred, y_true, mask_positions, categories, debug)
 
     if acc is not None:
         # The predictions are correct, when minimal distance is to positives
@@ -190,7 +210,7 @@ def outfit_distance_loss(y_pred, y_true, categories, mask_positions, margin, acc
     margin = tf.repeat(margin, dist_to_pos.shape[0])
 
     loss = dist_to_pos - dist_to_neg + margin
-    loss = tf.clip_by_value(loss, 0, tf.float32.max)
+    loss = tf.maximum(loss, 0)
 
     if debug:
         logger.debug("Distance losses")
@@ -201,7 +221,7 @@ def outfit_distance_loss(y_pred, y_true, categories, mask_positions, margin, acc
 
 def outfit_distance_fitb(y_pred, y_true, pred_positions, target_position, categories, acc: tf.metrics.Accuracy,
                          debug=False):
-    dist_to_pos, dist_to_neg = get_distances_to_targets(y_pred, y_true, pred_positions, debug)
+    dist_to_pos, dist_to_neg = get_distances_to_targets(y_pred, y_true, pred_positions, None, debug)
 
     if acc is not None:
         # The predictions are correct, when minimal distance is to positives

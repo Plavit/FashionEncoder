@@ -89,6 +89,8 @@ class FashionPreprocessorV2(tf.keras.Model):
                                         input_shape=(None, None, self.params["feature_dim"]), name="dense_input")
         self.input_dense = DenseLayerWrapper(i_dense, params)
 
+        self.regularizer = tf.keras.regularizers.l2()
+
         # target_dense = tf.keras.layers.Dense(self.params["hidden_size"], activation=lambda x: tf.nn.leaky_relu(x),
         #                                      input_shape=(None, None, self.params["feature_dim"]), name="dense_target")
         # self.target_dense = DenseLayerWrapper(target_dense, params)
@@ -127,6 +129,7 @@ class FashionPreprocessorV2(tf.keras.Model):
             inputs = self.cnn_extractor([inputs, categories, mask_positions])
 
         training_targets = self.input_dense(inputs, training=training)  # TODO: Target dense?
+        self.add_loss(self.regularizer(training_targets))
         masked_inputs = self.input_dense(inputs, training=training)
 
         # Place mask tokens
@@ -401,9 +404,7 @@ class FashionEncoder(tf.keras.Model):
 
             # if self.params["hidden_size"] != self.params["feature_dim"]:
             #     output = self.output_dense(output, training=training)
-
             self.add_loss(self.regularizer(output))
-
             return output
 
     def encode(self, inputs, categories, attention_bias, training):

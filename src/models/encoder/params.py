@@ -28,7 +28,8 @@ BASE = {
     "early_stop": True,
     "with_cnn": False,
     "target_gradient_from": 0,
-    "loss": "cross"
+    "loss": "cross",
+    "early_stop_warmup": 20
 }
 
 DISTANCE_BASE = BASE.copy()

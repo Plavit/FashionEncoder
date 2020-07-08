@@ -31,8 +31,8 @@ def build(hp: kt.HyperParameters):
     params["filter_size"] = hp.Int("filter_size", 32, 512, 64, default=128)
     params["batch_size"] = hp.Int("batch_size", 32, 256, 1, "log", default=128)
     params["category_merge"] = hp.Choice("category_merge", ["add", "multiply"], default="add")
-    params["loss"] = hp.Choice("metric", ["cross", "distance"], default="distance")
-    params["margin"] = hp.Choice("margin", [0.1, 0.3, 0.8, 1, 2, 5, 10], default=1)
+    params["loss"] = hp.Choice("metric", ["cross", "distance"], default="cross")
+    params["margin"] = hp.Choice("margin", [0.1, 0.3, 0.8, 1.0, 2.0, 5.0, 10.0], default=1)
 
     params["category_dim"] = params["hidden_size"]
     params["mode"] = "train"
@@ -48,7 +48,10 @@ def build(hp: kt.HyperParameters):
 
 def main():
     hp = kt.HyperParameters()
-    hp.Choice("margin", [0.1, 0.3, 0.8, 1.0, 2.0, 5.0, 10.0], default=1)
+    # hp.Choice("margin", [0.1, 0.3, 0.8, 1.0, 2.0, 5.0, 10.0], default=1)
+    # hp.Choice("batch_size", [16, 32, 64, 128, 256], default=128)
+    hp.Choice("hidden_size", [32, 64, 128, 256], default=128)
+    hp.Int("num_hidden_layers", 1, 3, 1, default=1)
 
     current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 

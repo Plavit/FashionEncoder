@@ -146,7 +146,7 @@ class EncoderTask:
                 loss_value = metrics.outfit_distance_loss(
                     outputs, tf.stop_gradient(targets), inputs[1], inputs[2], self.params["margin"], acc) \
                              / num_replicas
-                # loss_value += tf.add_n(model.losses)
+                loss_value += tf.add_n(model.losses)
             else:
                 raise RuntimeError("Unexpected loss function")
 
@@ -192,7 +192,7 @@ class EncoderTask:
         model = fashion_enc.create_model(self.params, True)
         model.summary()
 
-        test_model = fashion_enc.create_model(self.params, False)
+        # test_model = fashion_enc.create_model(self.params, False)
 
         # Threshold of valid acc when target gradient is not stopped
         max_valid = 0
@@ -207,7 +207,8 @@ class EncoderTask:
 
         if "early_stop" in self.params and self.params["early_stop"]:
             early_stopping_monitor = utils.EarlyStoppingMonitor(self.params["early_stop_patience"],
-                                                                self.params["early_stop_delta"], 50)
+                                                                self.params["early_stop_delta"],
+                                                                self.params["early_stop_warmup"])
 
         for epoch in range(1, num_epochs + 1):
             epoch_loss_avg = tf.keras.metrics.Mean('epoch_loss')
@@ -252,8 +253,8 @@ class EncoderTask:
 
             if epoch % 2 == 0:
                 weights = model.get_weights()
-                test_model.set_weights(weights)
-                fitb_res = self.fitb(test_model, fitb_dataset, epoch)
+                # test_model.set_weights(weights)
+                fitb_res = self.fitb(model, fitb_dataset, epoch)
                 print("Epoch {:03d}: FITB Acc: {:.3f}".format(epoch, fitb_res), flush=True)
 
                 with train_summary_writer.as_default():
@@ -356,7 +357,8 @@ def main():
         "relu_dropout": 0.1,
         "learning_rate": 0.001,
         "category_dim": 1024,
-        "loss": "cross"
+        "loss": "cross",
+        "early_stop_warmup": 20
     }
 
     params.update(filtered)
