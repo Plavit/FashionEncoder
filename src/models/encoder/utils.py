@@ -77,8 +77,9 @@ def compute_padding_mask_from_categories(categories):
 
 def place_tensor_on_positions(inputs, tensor_to_place, positions, repeated=True):
     if repeated:
+        # repeated = tf.repeat(tensor_to_place, tf.shape(positions)[0])
         repeated = tf.expand_dims(tensor_to_place, 0)
-        # Repeat the tensor_to_place to match the count of positions
+        # # Repeat the tensor_to_place to match the count of positions
         repeated = tf.tile(repeated, [tf.shape(positions)[0], 1])
         # Reshape to (number of masked items, feature_dim)
         updates = tf.reshape(repeated, shape=(-1, tf.shape(tensor_to_place)[0]))

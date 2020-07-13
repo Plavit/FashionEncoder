@@ -192,7 +192,7 @@ class EncoderTask:
         model = fashion_enc.create_model(self.params, True)
         model.summary()
 
-        # test_model = fashion_enc.create_model(self.params, False)
+        test_model = fashion_enc.create_model(self.params, False)
 
         # Threshold of valid acc when target gradient is not stopped
         max_valid = 0
@@ -253,8 +253,8 @@ class EncoderTask:
 
             if epoch % 2 == 0:
                 weights = model.get_weights()
-                # test_model.set_weights(weights)
-                fitb_res = self.fitb(model, fitb_dataset, epoch)
+                test_model.set_weights(weights)
+                fitb_res = self.fitb(test_model, fitb_dataset, epoch)
                 print("Epoch {:03d}: FITB Acc: {:.3f}".format(epoch, fitb_res), flush=True)
 
                 with train_summary_writer.as_default():
@@ -284,6 +284,7 @@ class EncoderTask:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset-files", type=str, nargs="+", help="Paths to dataset files")
+    parser.add_argument("--test-files", type=str, nargs="+", help="Paths to test dataset files")
     parser.add_argument("--test-files", type=str, nargs="+", help="Paths to test dataset files")
     parser.add_argument("--fitb-file", type=str,  help="Path to FITB dataset files")
     parser.add_argument("--batch-size", type=int, help="Batch size")

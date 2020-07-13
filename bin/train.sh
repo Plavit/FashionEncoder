@@ -9,16 +9,16 @@ python -m "src.models.encoder.encoder_main" \
   --batch-size 128 \
   --epoch-count 200 \
   --mode "train" \
-  --hidden-size 64 \
-  --category-dim 64 \
-  --filter-size 64 \
-  --masking-mode "category-masking" \
-  --num-heads 8 \
-  --num-hidden-layers 3 \
+  --hidden-size 128 \
+  --category-dim 128 \
+  --filter-size 256 \
+  --masking-mode "single-token" \
+  --num-heads 16 \
+  --num-hidden-layers 1 \
   --learning-rate "0.0005" \
   --categories-count 5000 \
   --category-merge "add" \
-  --info "Cross, fixed mask" \
+  --info "Cross, fixed mask, smoothing" \
   --category-file "/mnt/0/projects/outfit-generation/data/raw/polyvore_outfits/categories.csv" \
   --category-embedding \
   --with-category-grouping \
@@ -27,6 +27,7 @@ python -m "src.models.encoder.encoder_main" \
   --early-stop \
   --early-stop-patience 10 \
   --early-stop-delta "0.002" \
+  --with-mask-category-embedding \
   --loss "cross"
 
 #python -m "src.models.encoder.encoder_main" \

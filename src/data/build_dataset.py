@@ -15,7 +15,6 @@ def main():
     parser.add_argument("--tfrecord-template", type=str, help="Template for .tfrecord file names", required=True)
     parser.add_argument("--shard-count", type=int, help="Number of .tfrecord files", required=True)
     parser.add_argument("--with-features", help="With CNN features extracted", action='store_true')
-    parser.add_argument("--model-path", type=str, help="Path saved model to use for feature extraction. (if not specified use InceptionV3)")
 
     args = parser.parse_args()
 
@@ -24,7 +23,6 @@ def main():
     output_template = args.tfrecord_template
     shard_count = args.shard_count
     with_features = args.with_features
-    model_path = args.model_path
 
     print("Arguments parsed", flush=True)
 

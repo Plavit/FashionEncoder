@@ -4,6 +4,8 @@ import tensorflow as tf
 _NEG_INF_FP32 = -1e9
 _INF_FP32 = 1e9
 
+xloss = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
+
 
 def xentropy_loss(y_pred, y_true, categories, mask_positions, acc=None, debug=False, categorywise_only=False):
     logger = tf.get_logger()
@@ -54,10 +56,10 @@ def xentropy_loss(y_pred, y_true, categories, mask_positions, acc=None, debug=Fa
     if acc is not None:
         acc(labels, logits, sample_weight=weights)
 
-    cross_entropy = tf.nn.softmax_cross_entropy_with_logits(labels=labels, logits=logits)
+    cross_entropy = xloss(labels, logits, sample_weight=weights)
     if debug:
         logger.debug(cross_entropy)
-    cross_entropy = tf.tensordot(cross_entropy, weights, 1)
+    # cross_entropy = tf.tensordot(cross_entropy, weights, 1)
     if debug:
         logger.debug("Cross Entropy")
         logger.debug(cross_entropy)

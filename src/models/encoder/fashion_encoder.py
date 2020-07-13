@@ -30,11 +30,6 @@ import src.models.encoder.layers as layers
 import src.models.encoder.utils as utils
 
 
-# Disable the not-callable lint error, since it claims many objects are not
-# callable when they actually are.
-# pylint: disable=not-callable
-
-
 def create_model(params, is_train):
     """Creates a Fashion Encoder model."""
     with tf.name_scope("model"):
@@ -149,122 +144,6 @@ class FashionPreprocessorV2(tf.keras.Model):
                 logger.debug(masked_inputs)
 
         return masked_inputs, training_targets
-
-
-class FashionPreprocessor(tf.keras.Model):
-
-    def __init__(self, params, name=None):
-        """Initialize layers to build preprocessor.
-
-        Args:
-          params: hyperparameter object defining layer sizes, dropout values, etc.
-          name: name of the model.
-        """
-        super(FashionPreprocessor, self).__init__(name=name)
-        self.params = params
-
-        self.tokens_embedding = tf.keras.layers.Embedding(input_dim=1,
-                                                          output_dim=self.params["feature_dim"],
-                                                          name="tokens_embedding", embeddings_initializer="ones")
-        self.general_mask_id = tf.constant([0])
-
-        if params["with_cnn"]:
-            self.cnn_extractor = CNNExtractor(params, "cnn_extractor")
-
-        if params["category_embedding"]:
-            if params["category_merge"] == "add":
-                self.category_embedding = layers.CategoryAdder(params)
-            elif params["category_merge"] == "multiply":
-                self.category_embedding = layers.CategoryMultiplier(params)
-            elif params["category_merge"] == "concat":
-                self.category_embedding = layers.CategoryConcater(params)
-
-        i_dense = tf.keras.layers.Dense(self.params["hidden_size"], activation=lambda x: tf.nn.leaky_relu(x),
-                                        input_shape=(None, None, self.params["feature_dim"]), name="dense_input")
-        self.input_dense = DenseLayerWrapper(i_dense, params)
-
-    def _place_mask_token(self, inputs, mask_positions):
-        logger = tf.get_logger()
-
-        with tf.name_scope("Masking"):
-            mask_tensor = self.tokens_embedding(self.general_mask_id)
-            mask_tensor = tf.squeeze(mask_tensor)
-            if self.params["mode"] == "debug":
-                logger.debug("Mask tensor")
-                logger.debug(mask_tensor)
-
-            masked_inputs = utils.place_tensor_on_positions(inputs, mask_tensor, mask_positions)
-
-        return masked_inputs
-
-    def _add_category_embedding(self, inputs, categories, mask_positions):
-        return self.category_embedding([inputs, categories, mask_positions])
-
-    def call(self, inputs, *args, **kwargs):
-        """Calculate target logits or inferred target sequences.
-
-        Args:
-          inputs: input tensor list of size 1 or 2.
-            First item, inputs: float tensor with shape [batch_size, input_length, feature_dim].
-            Second item (optional), targets: None or float tensor with shape
-              [batch_size, target_length, feature_dim].
-          training: boolean, whether in training mode or not.
-
-        Returns:
-          If targets is defined, then return logits for each word in the target
-          sequence. float tensor with shape [batch_size, target_length, feature_dim]
-          If target is none, then generate output sequence one token at a time.
-            returns a dictionary {
-              outputs: [batch_size, feature_dim]
-              scores: [batch_size, float]}
-          Even when float16 is used, the output tensor(s) are always float32.
-
-        Raises:
-          NotImplementedError: If try to use padded decode method on CPU/GPUs.
-        """
-
-        inputs, categories, mask_positions = inputs[0], inputs[1], inputs[2]
-        logger = tf.get_logger()
-        training = kwargs["training"]
-        if self.params["mode"] == "debug":
-            logger.debug("Categories")
-            logger.debug(categories)
-
-        # Extract Image features if needed
-        if self.params["with_cnn"]:
-            inputs = self.cnn_extractor([inputs, categories, mask_positions])
-
-        # Place mask tokens
-        if self.params["masking_mode"] == "single-token" and mask_positions is not None:
-            masked_inputs = self._place_mask_token(inputs, mask_positions)
-        else:
-            masked_inputs = inputs
-
-        if self.params["mode"] == "debug":
-            logger.debug("Mask Positions")
-            logger.debug(mask_positions)
-            logger.debug("Masked Inputs")
-            logger.debug(masked_inputs)
-
-        # Merge visual features with category embedding
-        if self.params["category_embedding"]:
-            training_targets = self._add_category_embedding(inputs, categories, None)
-            training_targets = self.input_dense(training_targets, training=training)
-            masked_inputs = self._add_category_embedding(masked_inputs, categories, mask_positions)
-
-            if self.params["mode"] == "debug":
-                logger.debug("Masked inputs with categories")
-                logger.debug(masked_inputs)
-                logger.debug("Training targets with categories")
-                logger.debug(masked_inputs)
-
-            masked_inputs = self.input_dense(masked_inputs, training=training)
-
-            return masked_inputs, training_targets
-        else:
-            masked_inputs = self.input_dense(masked_inputs, training=training)
-            return masked_inputs, self.input_dense(inputs, training=training)
-
 
 class CNNExtractor(tf.keras.Model):
 
