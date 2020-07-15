@@ -16,21 +16,31 @@ class SingleMasking(tf.keras.layers.Layer):
                                                           output_dim=self.params["hidden_size"],
                                                           name="tokens_embedding")
         self.token_id = tf.constant([0])
+        self.dropout = tf.keras.layers.Dropout(self.params["emb_dropout"])
 
-    def __call__(self, inputs, *args, **kwargs):
+    def __call__(self, inputs, *args, training=False, **kwargs):
         inputs, categories, mask_positions = inputs[0], inputs[1], inputs[2]
         logger = tf.get_logger()
 
         with tf.name_scope("Masking"):
             mask_tensor = self.tokens_embedding(self.token_id)
-            mask_tensor = tf.squeeze(mask_tensor)
+
+            # Repeat the tensor_to_place to match the count of positions
+            repeated_mask = tf.tile(mask_tensor, [tf.shape(mask_positions)[0], 1])
             if self.params["mode"] == "debug":
                 logger.debug("Mask positions")
                 logger.debug(mask_positions)
                 logger.debug("Mask tensor")
                 logger.debug(mask_tensor)
+                logger.debug("repeated_mask")
+                logger.debug(repeated_mask)
+            # Reshape to (number of masked items, feature_dim)
+            repeated_mask = tf.reshape(repeated_mask, shape=(-1, tf.shape(mask_tensor)[1]))
 
-            masked_inputs = utils.place_tensor_on_positions(inputs, mask_tensor, mask_positions)
+            if training:
+                repeated_mask = self.dropout(repeated_mask)
+
+            masked_inputs = utils.place_tensor_on_positions(inputs, repeated_mask, mask_positions, False)
 
         return masked_inputs
 

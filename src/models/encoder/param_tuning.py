@@ -10,7 +10,7 @@ from src.models.encoder.encoder_main import EncoderTask
 class FashionModelTuner(kt.Tuner):
     def run_trial(self, trial, **kwargs):
         model = self.hypermodel.build(trial.hyperparameters)  # type: tf.keras.Model
-        params = model.get_layer("fashion_encoder").params
+        params = model.get_layer("encoder").params
 
         if "checkpoint_dir" in params:
             del params["checkpoint_dir"]  # TODO: Do not set parameters during training
@@ -22,14 +22,14 @@ class FashionModelTuner(kt.Tuner):
 
 
 def build(hp: kt.HyperParameters):
-    params = model_params.BASE
+    params = model_params.MP_ADD
 
     params["learning_rate"] = hp.Choice("learning_rate", [0.005, 0.001, 0.0005, 0.0001], default=0.0005)
-    params["hidden_size"] = hp.Choice("hidden_size", [32, 64, 128, 256], default=128)
-    params["num_hidden_layers"] = hp.Int("num_hidden_layers", 1, 4, 1, default=1)
-    params["num_heads"] = hp.Choice("num_heads", [1, 2, 4, 8, 16, 32], default=16)
-    params["filter_size"] = hp.Int("filter_size", 32, 512, 64, default=128)
     params["batch_size"] = hp.Int("batch_size", 32, 256, 1, "log", default=128)
+    params["hidden_size"] = hp.Choice("hidden_size", [32, 64, 128, 256], default=256)
+    params["num_hidden_layers"] = hp.Int("num_hidden_layers", 1, 4, 1, default=2)
+    params["num_heads"] = hp.Choice("num_heads", [1, 2, 4, 8, 16, 32], default=32)
+    params["filter_size"] = params["hidden_size"] * 2
     params["category_merge"] = hp.Choice("category_merge", ["add", "multiply"], default="add")
     params["loss"] = hp.Choice("metric", ["cross", "distance"], default="cross")
     params["margin"] = hp.Choice("margin", [0.1, 0.3, 0.8, 1.0, 2.0, 5.0, 10.0], default=1)
@@ -37,9 +37,11 @@ def build(hp: kt.HyperParameters):
     params["category_dim"] = params["hidden_size"]
     params["mode"] = "train"
 
-    params["dataset_files"] = "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-train-000-1.tfrecord"
-    params["fitb_file"] = "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-fitb-features-valid.tfrecord"
-    params["category_file"] = "/mnt/0/projects/outfit-generation/data/raw/polyvore_outfits/categories.csv"
+    params["layer_postprocess_dropout"] = hp.Choice("layer_postprocess_dropout", [0.05, 0.1, 0.2, 0.3, 0.4, 0.5],
+                                                    default=0.1)
+    params["attention_dropout"] = hp.Choice("attention_dropout", [0.05, 0.1, 0.2, 0.3, 0.4, 0.5], default=0.1)
+    params["relu_dropout"] = hp.Choice("relu_dropout", [0.05, 0.1, 0.2, 0.3, 0.4, 0.5], default=0.1)
+    params["dense_regularization"] = hp.Choice("dense_regularization", [0.0005, 0.001, 0.005, 0.01], default=0.001)
 
     model = fashion_enc.create_model(params, True)
 
@@ -48,17 +50,18 @@ def build(hp: kt.HyperParameters):
 
 def main():
     hp = kt.HyperParameters()
-    # hp.Choice("margin", [0.1, 0.3, 0.8, 1.0, 2.0, 5.0, 10.0], default=1)
-    # hp.Choice("batch_size", [16, 32, 64, 128, 256], default=128)
-    hp.Choice("hidden_size", [32, 64, 128, 256], default=128)
-    hp.Int("num_hidden_layers", 1, 3, 1, default=1)
+
+    hp.Choice("layer_postprocess_dropout", [0.05, 0.1, 0.2, 0.3], default=0.1)
+    hp.Choice("attention_dropout", [0.05, 0.1, 0.2, 0.3], default=0.1)
+    hp.Choice("relu_dropout", [0.05, 0.1, 0.2, 0.3], default=0.1)
+    hp.Choice("dense_regularization", [0.0005, 0.001, 0.005, 0.01], default=0.001)
 
     current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
     tuner = FashionModelTuner(
         oracle=kt.oracles.BayesianOptimization(
             objective=kt.Objective("acc", "max"),
-            max_trials=30,
+            max_trials=100,
             tune_new_entries=False,
             hyperparameters=hp
         ),

@@ -1,3 +1,4 @@
+import argparse
 import csv
 
 import tensorflow as tf
@@ -79,7 +80,7 @@ def place_tensor_on_positions(inputs, tensor_to_place, positions, repeated=True)
     if repeated:
         # repeated = tf.repeat(tensor_to_place, tf.shape(positions)[0])
         repeated = tf.expand_dims(tensor_to_place, 0)
-        # # Repeat the tensor_to_place to match the count of positions
+        # Repeat the tensor_to_place to match the count of positions
         repeated = tf.tile(repeated, [tf.shape(positions)[0], 1])
         # Reshape to (number of masked items, feature_dim)
         updates = tf.reshape(repeated, shape=(-1, tf.shape(tensor_to_place)[0]))
@@ -120,3 +121,14 @@ class EarlyStoppingMonitor:
 
         if self.runs_without_improvement > self.patience and self.total_runs > self.warmup:
             return True
+
+
+def str_to_bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')

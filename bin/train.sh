@@ -1,70 +1,113 @@
 #!/usr/bin/env bash
 
-#python -m "src.models.encoder.param_tuning"
-
 python -m "src.models.encoder.encoder_main" \
-  --dataset-files "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-train-000-1.tfrecord" \
-  --test-files "/mnt/0/projects/outfit-generation/data/processed/tfrecords/valid-000-1.tfrecord" \
-  --fitb-file "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-fitb-features-valid.tfrecord" \
-  --batch-size 128 \
-  --epoch-count 200 \
   --mode "train" \
-  --hidden-size 128 \
+  --param-set "MP_ADD" \
   --category-dim 128 \
-  --filter-size 256 \
-  --masking-mode "single-token" \
   --num-heads 16 \
-  --num-hidden-layers 1 \
-  --learning-rate "0.0005" \
-  --categories-count 5000 \
-  --category-merge "add" \
-  --info "Cross, fixed mask, smoothing" \
-  --category-file "/mnt/0/projects/outfit-generation/data/raw/polyvore_outfits/categories.csv" \
-  --category-embedding \
-  --with-category-grouping \
-  --use-mask-category \
-  --categorywise-train \
-  --early-stop \
-  --early-stop-patience 10 \
-  --early-stop-delta "0.002" \
-  --with-mask-category-embedding \
-  --loss "cross"
+  --hidden-size 128 \
+  --filter-size 256 \
+  --num-hidden-layers 2 \
+  --epoch-count 100 \
+  --batch-size 128 \
+  --with-category-grouping False \
+  --learning-rate "0.0005"
 
 #python -m "src.models.encoder.encoder_main" \
-#  --dataset-files "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-images-train-000-10.tfrecord" \
-#     "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-images-train-001-10.tfrecord" \
-#     "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-images-train-002-10.tfrecord" \
-#     "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-images-train-003-10.tfrecord" \
-#     "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-images-train-004-10.tfrecord" \
-#     "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-images-train-005-10.tfrecord" \
-#     "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-images-train-006-10.tfrecord" \
-#     "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-images-train-007-10.tfrecord" \
-#     "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-images-train-008-10.tfrecord" \
-#     "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-images-train-009-10.tfrecord" \
-#  --test-files "/mnt/0/projects/outfit-generation/data/processed/tfrecords/valid-000-1.tfrecord" \
-#  --fitb-file "/mnt/0/projects/outfit-generation/data/processed/tfrecords/pod-fitb-images-valid.tfrecord" \
-#  --batch-size 10 \
+#  --mode "train" \
+#  --param-set "MP" \
+#  --num-heads 16 \
+#  --hidden-size 128 \
+#  --filter-size 256 \
+#  --num-hidden-layers 1 \
+#  --epoch-count 100 \
+#  --batch-size 128 \
+#  --with-category-grouping False \
+#  --learning-rate "0.0005"
+#
+#python -m "src.models.encoder.encoder_main" \
+#  --mode "train" \
+#  --param-set "MP" \
+#  --num-heads 16 \
+#  --hidden-size 256 \
+#  --filter-size 512 \
+#  --num-hidden-layers 1 \
+#  --epoch-count 100 \
+#  --batch-size 128 \
+#  --with-category-grouping False \
+#  --learning-rate "0.0005"
+
+#python -m "src.models.encoder.param_tuning"
+
+#python -m "src.models.encoder.encoder_main" \
+#  --train-files "data/processed/tfrecords/pod-train-000-1.tfrecord" \
+#  --valid-files "data/processed/tfrecords/pod-fitb-features-valid.tfrecord" \
+#  --test-file "data/processed/tfrecords/pod-fitb-features-test.tfrecord" \
+#  --batch-size 128 \
+#  --epoch-count 6 \
+#  --mode "train" \
+#  --hidden-size 128 \
+#  --category-dim 128 \
+#  --filter-size 256 \
+#  --masking-mode "single-token" \
+#  --num-heads 16 \
+#  --num-hidden-layers 1 \
+#  --learning-rate "0.0005" \
+#  --categories-count 5000 \
+#  --category-merge "add" \
+#  --info "Cross, fixed mask, smoothing" \
+#  --category-file "/mnt/0/projects/outfit-generation/data/raw/polyvore_outfits/categories.csv" \
+#  --category-embedding \
+#  --with-category-grouping \
+#  --use-mask-category \
+#  --categorywise-train \
+#  --early-stop \
+#  --early-stop-patience 10 \
+#  --early-stop-delta "0.002" \
+#  --with-mask-category-embedding \
+#  --loss "cross"
+#  --checkpoint-dir "logs/20200713-171119/tf_ckpts/"
+
+#python -m "src.models.encoder.encoder_main" \
+#  --train-files "data/processed/tfrecords/pod-images-train-000-10.tfrecord" \
+#     "data/processed/tfrecords/pod-images-train-001-10.tfrecord" \
+#     "data/processed/tfrecords/pod-images-train-002-10.tfrecord" \
+#     "data/processed/tfrecords/pod-images-train-003-10.tfrecord" \
+#     "data/processed/tfrecords/pod-images-train-004-10.tfrecord" \
+#     "data/processed/tfrecords/pod-images-train-005-10.tfrecord" \
+#     "data/processed/tfrecords/pod-images-train-006-10.tfrecord" \
+#     "data/processed/tfrecords/pod-images-train-007-10.tfrecord" \
+#     "data/processed/tfrecords/pod-images-train-008-10.tfrecord" \
+#     "data/processed/tfrecords/pod-images-train-009-10.tfrecord" \
+#  --valid-files "data/processed/tfrecords/pod-fitb-images-valid.tfrecord" \
+#  --test-files "data/processed/tfrecords/pod-fitb-test-valid.tfrecord" \
+#  --batch-size 2 \
 #  --epoch-count 50 \
 #  --mode "train" \
 #  --hidden-size 128 \
 #  --category-dim 128 \
-#  --filter-size 128 \
+#  --filter-size 256 \
 #  --masking-mode "single-token" \
 #  --num-heads 16 \
 #  --valid-batch-size 2 \
 #  --num-hidden-layers 1 \
-#  --learning-rate "0.0005" \
-#  --categories-count 50 \
+#  --learning-rate "0.00025" \
+#  --categories-count 5000 \
 #  --category-merge "add" \
 #  --target-gradient-from 0 \
 #  --info "Low hidden size with images" \
-#  --category-file "/mnt/0/projects/outfit-generation/data/raw/polyvore_outfits/categories.csv" \
+#  --category-file "data/raw/polyvore_outfits/categories.csv" \
 #  --category-embedding \
 #  --use-mask-category \
 #  --with-category-grouping \
 #  --with-mask-category-embedding \
 #  --categorywise-train \
-#  --with-cnn
+#  --with-cnn \
+#  --with-weights "logs/20200714-084843/tf_ckpts/" \
+#  --early-stop \
+#  --early-stop-patience 8 \
+#  --early-stop-delta "0.002"
+
 
 
 #python -m "src.models.encoder.encoder_main" \

@@ -126,7 +126,7 @@ def add_mask_mock(inputs, input_categories, targets, target_categories, target_p
         # tf.debugging.assert_equal(all_same, tf.constant([True]))
         masked_category = tf.expand_dims(masked_category, axis=0)
     else:
-        masked_category = tf.constant([0], dtype=tf.int64)
+        masked_category = tf.constant([0], dtype=tf.int32)
     input_categories = tf.concat([masked_category, input_categories], axis=0)
 
     return inputs, input_categories, targets, target_categories, target_position
@@ -159,5 +159,5 @@ def get_fitb_dataset(filenames, with_features, category_lookup=None, use_mask_ca
                               ))
 
     return dataset.map(lambda inputs, input_categories, targets, target_categories, target_position: add_mask_mock(
-        inputs, input_categories, targets, target_categories, target_position, use_mask_category
-        )).cache()
+        inputs, tf.cast(input_categories, dtype=tf.int32), targets, tf.cast(target_categories, dtype=tf.int32),
+        target_position, use_mask_category)).cache()

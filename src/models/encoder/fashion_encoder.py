@@ -46,7 +46,7 @@ def create_model(params, is_train):
 
         encoder_inputs, training_targets = preprocessor([inputs, categories, mask_positions], training=is_train)
 
-        internal_model = FashionEncoder(params, name="fashion_encoder")
+        internal_model = FashionEncoder(params, name="encoder")
         ret = internal_model([encoder_inputs, categories], training=is_train)
 
         return tf.keras.Model([inputs, categories, mask_positions], [ret, training_targets])
@@ -81,14 +81,10 @@ class FashionPreprocessorV2(tf.keras.Model):
                 self.category_embedding = layers.CategoryConcater(params)
 
         i_dense = tf.keras.layers.Dense(self.params["hidden_size"], activation=lambda x: tf.nn.leaky_relu(x),
-                                        input_shape=(None, None, self.params["feature_dim"]), name="dense_input")
+                                        input_shape=(None, None, self.params["feature_dim"]), name="dense_input",
+                                        activity_regularizer=tf.keras.regularizers.l2(self.params["dense_regularization"])
+                                        )
         self.input_dense = DenseLayerWrapper(i_dense, params)
-
-        self.regularizer = tf.keras.regularizers.l2()
-
-        # target_dense = tf.keras.layers.Dense(self.params["hidden_size"], activation=lambda x: tf.nn.leaky_relu(x),
-        #                                      input_shape=(None, None, self.params["feature_dim"]), name="dense_target")
-        # self.target_dense = DenseLayerWrapper(target_dense, params)
 
     def _add_category_embedding(self, inputs, categories, mask_positions):
         return self.category_embedding([inputs, categories, mask_positions])
@@ -119,17 +115,16 @@ class FashionPreprocessorV2(tf.keras.Model):
             logger.debug("Categories")
             logger.debug(categories)
 
-        # Extract Image features if needed
         if self.params["with_cnn"]:
+            # Extract Image features
             inputs = self.cnn_extractor([inputs, categories, mask_positions])
 
-        training_targets = self.input_dense(inputs, training=training)  # TODO: Target dense?
-        self.add_loss(self.regularizer(training_targets))
-        masked_inputs = self.input_dense(inputs, training=training)
+        training_targets = self.input_dense(inputs, training=training)
+        masked_inputs = training_targets
 
         # Place mask tokens
         if mask_positions is not None:
-            masked_inputs = self.masking_layer([masked_inputs, categories, mask_positions])
+            masked_inputs = self.masking_layer([masked_inputs, categories, mask_positions], training=training)
             if self.params["mode"] == "debug":
                 logger.debug("Masked Inputs")
                 logger.debug(masked_inputs)
@@ -144,6 +139,7 @@ class FashionPreprocessorV2(tf.keras.Model):
                 logger.debug(masked_inputs)
 
         return masked_inputs, training_targets
+
 
 class CNNExtractor(tf.keras.Model):
 
@@ -221,10 +217,10 @@ class FashionEncoder(tf.keras.Model):
         else:
             units = self.params["feature_dim"]
 
-        o_dense = tf.keras.layers.Dense(units, activation=lambda x: tf.nn.leaky_relu(x),
-                                        name="dense_output")
-        self.output_dense = DenseLayerWrapper(o_dense, params)
-        self.regularizer = tf.keras.regularizers.l2()
+        self.activity_regularizer = tf.keras.regularizers.l2(self.params["enc_regularization"])
+        # o_dense = tf.keras.layers.Dense(units, activation=lambda x: tf.nn.leaky_relu(x),
+        #                                 name="dense_output")
+        # self.output_dense = DenseLayerWrapper(o_dense, params)
 
     def get_config(self):
         return {
@@ -281,9 +277,11 @@ class FashionEncoder(tf.keras.Model):
 
             output = self.encode(inputs, categories, attention_bias, training)
 
+            self.add_loss(self.activity_regularizer(output))
+
             # if self.params["hidden_size"] != self.params["feature_dim"]:
             #     output = self.output_dense(output, training=training)
-            self.add_loss(self.regularizer(output))
+
             return output
 
     def encode(self, inputs, categories, attention_bias, training):

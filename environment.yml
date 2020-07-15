@@ -1,4 +1,4 @@
-name: outfit-generation
+name: outfit-recommendation
 channels:
   - defaults
   - conda-forge

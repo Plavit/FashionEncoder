@@ -44,7 +44,7 @@ def main():
                     writer.close()
             writer = tf.io.TFRecordWriter(
                 output_template.format(
-                    i // outfits_per_file, files_per_dataset))
+                    i // outfits_per_file, files_per_dataset - 1))
         writer.write(examples[i])
         if i == len(examples):
             if writer is not None:
