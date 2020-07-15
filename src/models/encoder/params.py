@@ -28,9 +28,9 @@ BASE = {
     "target_gradient_from": 0,
     "loss": "cross",
     "valid_mode": "fitb",
-    "dense_regularization": 0.001,
+    "dense_regularization": 0,
     "enc_regularization": 0,
-
+    "emb_dropout": 0
 }
 
 
@@ -57,11 +57,6 @@ MP.update(
         "valid_mode": "masking",
         "batch_size": 128,
         "learning_rate": 0.0005,
-        "layer_postprocess_dropout": 0.2,
-        "dense_regularization": 0.0005,
-        "attention_dropout": 0.05,
-        "relu_dropout": 0.05,
-        "emb_dropout": 0.1
     }
 )
 
@@ -76,7 +71,7 @@ MP_CATEGORY.update(
     }
 )
 
-MP_ADD = MP.copy()
+MP_ADD = MP_CATEGORY.copy()
 MP_ADD.update(
     {
         "category_embedding": True,
@@ -85,7 +80,7 @@ MP_ADD.update(
      }
 )
 
-MP_MUL = MP.copy()
+MP_MUL = MP_CATEGORY.copy()
 MP_MUL.update(
     {
         "category_embedding": True,
@@ -94,7 +89,7 @@ MP_MUL.update(
      }
 )
 
-MP_CONCAT = MP.copy()
+MP_CONCAT = MP_CATEGORY.copy()
 MP_CONCAT.update(
     {
         "category_embedding": True,

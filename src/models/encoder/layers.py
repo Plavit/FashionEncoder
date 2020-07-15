@@ -18,7 +18,7 @@ class SingleMasking(tf.keras.layers.Layer):
         self.token_id = tf.constant([0])
         self.dropout = tf.keras.layers.Dropout(self.params["emb_dropout"])
 
-    def __call__(self, inputs, *args, training=False, **kwargs):
+    def __call__(self, inputs, training=False, *args, **kwargs):
         inputs, categories, mask_positions = inputs[0], inputs[1], inputs[2]
         logger = tf.get_logger()
 
