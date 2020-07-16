@@ -15,8 +15,9 @@ from src.models.encoder import params as params_sets
 PARAMS_MAP = {
     "MP": params_sets.MP,
     "MP_ADD": params_sets.MP_ADD,
-    "MP_MUL": params_sets.MP,
-    "MP_CONCAT": params_sets.MP,
+    "MP_MUL": params_sets.MP_MUL,
+    "MP_CONCAT": params_sets.MP_CONCAT,
+    "MP_NEG": params_sets.MP_NEG,
 }
 
 

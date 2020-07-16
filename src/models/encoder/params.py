@@ -30,7 +30,8 @@ BASE = {
     "valid_mode": "fitb",
     "dense_regularization": 0,
     "enc_regularization": 0,
-    "emb_dropout": 0
+    "emb_dropout": 0,
+    "i_dense_dropout": 0.1
 }
 
 
@@ -63,39 +64,49 @@ MP.update(
 MP_CATEGORY = MP.copy()
 MP_CATEGORY.update(
     {
-        "layer_postprocess_dropout": 0.2,
-        "dense_regularization": 0.0005,
+        "category_embedding": True,
+        "layer_postprocess_dropout": 0.05,
+        "i_dense_dropout": 0.3,
+        "dense_regularization": 0.001,
         "attention_dropout": 0.05,
         "relu_dropout": 0.05,
-        "emb_dropout": 0.1
+        "emb_dropout": 0.15,
+        "with_category_grouping": False,
+        "categories_count": 5000,
     }
 )
 
 MP_ADD = MP_CATEGORY.copy()
 MP_ADD.update(
     {
-        "category_embedding": True,
         "category_merge": "add",
-        "categories_count": 5000,
-     }
+    }
 )
 
 MP_MUL = MP_CATEGORY.copy()
 MP_MUL.update(
     {
-        "category_embedding": True,
         "category_merge": "multiply",
-        "categories_count": 5000,
-     }
+    }
 )
 
 MP_CONCAT = MP_CATEGORY.copy()
 MP_CONCAT.update(
     {
-        "category_embedding": True,
         "category_merge": "concat",
-        "categories_count": 5000,
-     }
+    }
+)
+
+
+MP_NEG = MP.copy()
+MP_NEG.update(
+    {
+        "test_files": ["data/processed/tfrecords/fitb-features-test-neg.tfrecord"],
+        "valid_files": ["data/processed/tfrecords/fitb-features-valid-neg.tfrecord"],
+        "category_merge": "add",
+        "category_embedding": True,
+        "valid_mode": "fitb",
+    }
 )
 
 DISTANCE_BASE = BASE.copy()

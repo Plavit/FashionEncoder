@@ -1,47 +1,51 @@
 #!/usr/bin/env bash
 
-python -m "src.models.encoder.encoder_main" \
-  --mode "train" \
-  --param-set "MP_ADD" \
-  --category-dim 32 \
-  --num-heads 32 \
-  --hidden-size 32 \
-  --filter-size 64 \
-  --num-hidden-layers 2 \
-  --epoch-count 100 \
-  --batch-size 128
+#python -m "src.models.encoder.encoder_main" \
+#  --mode "train" \
+#  --param-set "MP_ADD" \
+#  --category-dim 32 \
+#  --num-heads 32 \
+#  --hidden-size 32 \
+#  --filter-size 64 \
+#  --num-hidden-layers 2 \
+#  --epoch-count 100 \
+#  --with-category-grouping False \
+#  --batch-size 128
+#
+#python -m "src.models.encoder.encoder_main" \
+#  --mode "train" \
+#  --param-set "MP_ADD" \
+#  --category-dim 64 \
+#  --num-heads 32 \
+#  --hidden-size 64 \
+#  --filter-size 128 \
+#  --num-hidden-layers 2 \
+#  --epoch-count 100 \
+#  --with-category-grouping False \
+#  --batch-size 128
+#
+#python -m "src.models.encoder.encoder_main" \
+#  --mode "train" \
+#  --param-set "MP_ADD" \
+#  --category-dim 128 \
+#  --num-heads 32 \
+#  --hidden-size 128 \
+#  --filter-size 256 \
+#  --num-hidden-layers 2 \
+#  --epoch-count 100 \
+#  --with-category-grouping False \
+#  --batch-size 128
 
 python -m "src.models.encoder.encoder_main" \
   --mode "train" \
-  --param-set "MP_ADD" \
-  --category-dim 64 \
-  --num-heads 32 \
-  --hidden-size 64 \
-  --filter-size 128 \
-  --num-hidden-layers 2 \
-  --epoch-count 100 \
-  --batch-size 128
-
-python -m "src.models.encoder.encoder_main" \
-  --mode "train" \
-  --param-set "MP_ADD" \
-  --category-dim 128 \
-  --num-heads 32 \
-  --hidden-size 128 \
-  --filter-size 256 \
-  --num-hidden-layers 2 \
-  --epoch-count 100 \
-  --batch-size 128
-
-python -m "src.models.encoder.encoder_main" \
-  --mode "train" \
-  --param-set "MP_ADD" \
+  --param-set "MP_NEG" \
   --category-dim 256 \
   --num-heads 32 \
   --hidden-size 256 \
   --filter-size 512 \
   --num-hidden-layers 2 \
   --epoch-count 100 \
+  --with-category-grouping False \
   --batch-size 128
 
 #python -m "src.models.encoder.param_tuning"

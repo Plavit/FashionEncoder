@@ -350,7 +350,7 @@ class DenseLayerWrapper(tf.keras.layers.Layer):
         super(DenseLayerWrapper, self).__init__()
         self.layer = layer
         self.params = params
-        self.postprocess_dropout = params["layer_postprocess_dropout"]
+        self.postprocess_dropout = params["i_dense_dropout"]
 
     def build(self, input_shape):
         super(DenseLayerWrapper, self).build(input_shape)
