@@ -12,8 +12,13 @@ class SingleMasking(tf.keras.layers.Layer):
         super(SingleMasking, self).__init__()
         self.params = params
 
+        if "category_embedding" in params and params["category_merge"] == "concat":
+            size = params["hidden_size"] - params["category_dim"]
+        else:
+            size = params["hidden_size"]
+
         self.tokens_embedding = tf.keras.layers.Embedding(input_dim=1,
-                                                          output_dim=self.params["hidden_size"],
+                                                          output_dim=size,
                                                           name="tokens_embedding")
         self.token_id = tf.constant([0])
         self.dropout = tf.keras.layers.Dropout(self.params["emb_dropout"])
@@ -51,8 +56,13 @@ class CategoryMasking(tf.keras.layers.Layer):
         super(CategoryMasking, self).__init__()
         self.params = params
 
+        if "category_embedding" in params and params["category_merge"] == "concat":
+            size = params["hidden_size"] - params["category_dim"]
+        else:
+            size = params["hidden_size"]
+
         self.tokens_embedding = tf.keras.layers.Embedding(input_dim=params["categories_count"],
-                                                          output_dim=self.params["hidden_size"],
+                                                          output_dim=size,
                                                           name="tokens_embedding")
 
     def __call__(self, inputs, *args, **kwargs):

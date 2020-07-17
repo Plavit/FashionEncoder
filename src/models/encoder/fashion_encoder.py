@@ -72,18 +72,22 @@ class FashionPreprocessorV2(tf.keras.Model):
         elif self.params["masking_mode"] == "category-masking":
             self.masking_layer = layers.CategoryMasking(params)
 
-        if params["category_embedding"]:
+        dense_size = params["hidden_size"]
+
+        if "category_embedding" in params:
             if params["category_merge"] == "add":
                 self.category_embedding = layers.CategoryAdder(params)
             elif params["category_merge"] == "multiply":
                 self.category_embedding = layers.CategoryMultiplier(params)
             elif params["category_merge"] == "concat":
                 self.category_embedding = layers.CategoryConcater(params)
+                dense_size = params["hidden_size"] - params["category_dim"]
 
-        i_dense = tf.keras.layers.Dense(self.params["hidden_size"], activation=lambda x: tf.nn.leaky_relu(x),
+        i_dense = tf.keras.layers.Dense(dense_size, activation=lambda x: tf.nn.leaky_relu(x),
                                         input_shape=(None, None, self.params["feature_dim"]), name="dense_input",
                                         activity_regularizer=tf.keras.regularizers.l2(self.params["dense_regularization"])
                                         )
+
         self.input_dense = DenseLayerWrapper(i_dense, params)
 
     def _add_category_embedding(self, inputs, categories, mask_positions):
@@ -398,6 +402,7 @@ class EncoderStack(tf.keras.layers.Layer):
     def build(self, input_shape):
         """Builds the encoder stack."""
         params = self.params
+
         for _ in range(params["num_hidden_layers"]):
             # Create sublayers for each layer.
             self_attention_layer = layers.SelfAttention(

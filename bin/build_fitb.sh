@@ -8,4 +8,5 @@ python -m "src.data.build_fitb" \
   --dataset-root "${DATASET_ROOT}" \
   --dataset-file "${DATASET_FILE}" \
   --output-path "${OUTPUT_FILE}" \
-  --fitb-file "fill_in_blank_valid.json"
+  --fitb-file "fill_in_blank_valid.json" \
+  --with-features

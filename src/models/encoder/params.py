@@ -54,10 +54,16 @@ MP.update(
          "data/processed/tfrecords/train-009-10.tfrecord"
         ],
         "test_files": ["data/processed/tfrecords/fitb-features.tfrecord"],
-        "valid_files": ["data/processed/tfrecords/valid-000-1.tfrecord"],
-        "valid_mode": "masking",
-        "batch_size": 128,
-        "learning_rate": 0.0005,
+        "valid_files": ["data/processed/tfrecords/fitb-features-valid.tfrecord"],
+        "valid_mode": "fitb",
+        "batch_size": 96,
+        "learning_rate": 0.002,
+        "layer_postprocess_dropout": 0.1,
+        "i_dense_dropout": 0.1,
+        "dense_regularization": 0,
+        "attention_dropout": 0.1,
+        "relu_dropout": 0.1,
+        "emb_dropout": 0,
     }
 )
 
@@ -65,14 +71,8 @@ MP_CATEGORY = MP.copy()
 MP_CATEGORY.update(
     {
         "category_embedding": True,
-        "layer_postprocess_dropout": 0.05,
-        "i_dense_dropout": 0.3,
-        "dense_regularization": 0.001,
-        "attention_dropout": 0.05,
-        "relu_dropout": 0.05,
-        "emb_dropout": 0.15,
         "with_category_grouping": False,
-        "categories_count": 5000,
+        "categories_count": 5000
     }
 )
 
@@ -98,13 +98,11 @@ MP_CONCAT.update(
 )
 
 
-MP_NEG = MP.copy()
+MP_NEG = MP_MUL.copy()
 MP_NEG.update(
     {
         "test_files": ["data/processed/tfrecords/fitb-features-test-neg.tfrecord"],
         "valid_files": ["data/processed/tfrecords/fitb-features-valid-neg.tfrecord"],
-        "category_merge": "add",
-        "category_embedding": True,
         "valid_mode": "fitb",
     }
 )

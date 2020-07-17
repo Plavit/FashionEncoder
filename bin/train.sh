@@ -38,15 +38,13 @@
 
 python -m "src.models.encoder.encoder_main" \
   --mode "train" \
-  --param-set "MP_NEG" \
-  --category-dim 256 \
+  --param-set "MP" \
+  --category-dim 128 \
   --num-heads 32 \
-  --hidden-size 256 \
-  --filter-size 512 \
+  --hidden-size 32 \
+  --filter-size 64  \
   --num-hidden-layers 2 \
-  --epoch-count 100 \
-  --with-category-grouping False \
-  --batch-size 128
+  --epoch-count 100
 
 #python -m "src.models.encoder.param_tuning"
 
