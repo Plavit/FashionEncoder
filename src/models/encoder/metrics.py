@@ -211,7 +211,7 @@ def outfit_distance_loss(y_pred, y_true, categories, mask_positions, margin, acc
     margin = tf.constant(margin)
     margin = tf.repeat(margin, dist_to_pos.shape[0])
 
-    loss = dist_to_pos - dist_to_neg + margin
+    loss = dist_to_pos + dist_to_neg + margin
     loss = tf.maximum(loss, 0)
 
     if debug:

@@ -22,7 +22,7 @@ class FashionModelTuner(kt.Tuner):
 
 
 def build(hp: kt.HyperParameters):
-    params = model_params.MP_ADD
+    params = model_params.PO_ADD
 
     params["learning_rate"] = hp.Choice("learning_rate", [0.005, 0.001, 0.0005, 0.0001], default=0.0005)
     params["batch_size"] = hp.Choice("batch_size", [32, 64, 96, 128], default=128)

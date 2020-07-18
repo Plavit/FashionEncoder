@@ -38,13 +38,14 @@
 
 python -m "src.models.encoder.encoder_main" \
   --mode "train" \
-  --param-set "MP" \
-  --category-dim 128 \
+  --param-set "PO" \
   --num-heads 32 \
-  --hidden-size 32 \
-  --filter-size 64  \
-  --num-hidden-layers 2 \
+  --category-dim 128 \
+  --hidden-size 128 \
+  --filter-size 256  \
+  --num-hidden-layers 1 \
   --epoch-count 100
+
 
 #python -m "src.models.encoder.param_tuning"
 
@@ -75,7 +76,6 @@ python -m "src.models.encoder.encoder_main" \
 #  --early-stop-delta "0.002" \
 #  --with-mask-category-embedding \
 #  --loss "cross"
-#  --checkpoint-dir "logs/20200713-171119/tf_ckpts/"
 
 #python -m "src.models.encoder.encoder_main" \
 #  --train-files "data/processed/tfrecords/pod-images-train-000-10.tfrecord" \

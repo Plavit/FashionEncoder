@@ -18,6 +18,10 @@ PARAMS_MAP = {
     "MP_MUL": params_sets.MP_MUL,
     "MP_CONCAT": params_sets.MP_CONCAT,
     "MP_NEG": params_sets.MP_NEG,
+    "PO": params_sets.PO,
+    "PO_ADD": params_sets.PO_ADD,
+    "PO_MUL": params_sets.PO_MUL,
+    "PO_CONCAT": params_sets.PO_CONCAT,
 }
 
 
@@ -178,11 +182,10 @@ class EncoderTask:
 
         if self.params["valid_mode"] == "masking":
             valid_dataset = input_pipeline.get_training_dataset(self.params["valid_files"],
-                                                                2,
-                                                                not self.params["with_cnn"], lookup).cache()
+                                                                2, not self.params["with_cnn"], lookup).cache()
         else:
             valid_dataset = input_pipeline.get_fitb_dataset([self.params["valid_files"]], not self.params["with_cnn"],
-                                                        lookup, self.params["use_mask_category"]).batch(1)
+                                                            lookup, self.params["use_mask_category"]).batch(1)
 
         test_dataset = input_pipeline.get_fitb_dataset([self.params["test_files"]], not self.params["with_cnn"],
                                                        lookup, self.params["use_mask_category"]).batch(1)
@@ -191,15 +194,12 @@ class EncoderTask:
 
     def _validate(self, model, valid_dataset):
         # Validation loop
-        valid_loss = tf.keras.metrics.Mean('valid_loss', dtype=tf.float32)
         valid_acc = tf.metrics.CategoricalAccuracy()
-        for x, y in valid_dataset:
+        for x, _ in valid_dataset:
             ret = model([x[0], x[1], x[2]], training=False)
             outputs = ret[0]
             targets = ret[1]
-            loss_value = metrics.xentropy_loss(outputs, targets, x[1], x[2], valid_acc)
-            # Track
-            valid_loss(loss_value)
+            metrics.xentropy_loss(outputs, targets, x[1], x[2], valid_acc)
         return valid_acc.result()
 
     def train(self, on_epoch_end=None):
@@ -236,11 +236,12 @@ class EncoderTask:
         else:
             print("Initializing from scratch.", flush=True)
 
+        # Load weights
         if "with_weights" in self.params:
             model.get_layer("preprocessor").load_weights(filepath=self.params["with_weights"] + "preprocessor.h5"
                                                          , by_name=True)
             model.get_layer("encoder").load_weights(filepath=self.params["with_weights"] + "encoder.h5"
-                                                         , by_name=True)
+                                                    , by_name=True)
             print("Restored weights from {}".format(self.params["with_weights"]), flush=True)
 
         if "early_stop" in self.params and self.params["early_stop"]:
@@ -289,13 +290,16 @@ class EncoderTask:
             print("Epoch {:03d}: Loss: {:.3f}, Acc: {:.3f}".format(epoch, epoch_loss_avg.result(),
                                                                    acc.result()))
 
+            # Validation step
             if epoch % 2 == 0:
                 weights = model.get_weights()
                 test_model.set_weights(weights)
+
                 if self.params["valid_mode"] == "masking":
                     valid_acc = self._validate(test_model, valid_dataset)
                 else:
                     valid_acc = self.fitb(test_model, valid_dataset)
+
                 print("Epoch {:03d}: Valid Acc: {:.3f}".format(epoch, valid_acc), flush=True)
 
                 with train_summary_writer.as_default():
@@ -304,6 +308,7 @@ class EncoderTask:
                 save_path = manager.save()
                 print("Saved checkpoint for step {}: {}".format(int(ckpt.step), save_path), flush=True)
 
+                # Save the best model
                 if valid_acc > max_valid:
                     max_valid = valid_acc
                     model.save_weights(str(Path(self.params["checkpoint_dir"], "best_weights.h5")))
@@ -312,6 +317,7 @@ class EncoderTask:
                     model.get_layer("encoder"). \
                         save_weights(str(Path(self.params["checkpoint_dir"], "encoder.h5")))
 
+                # Call custom callbacks
                 if on_epoch_end is not None:
                     for callback in on_epoch_end:
                         callback(model, valid_acc, epoch)
@@ -388,6 +394,7 @@ def main():
 
     filtered = {k: v for k, v in arg_dict.items() if v is not None}
 
+    # Create lists from filenames if needed
     if "train_files" in arg_dict and not isinstance(arg_dict["train_files"], list):
         arg_dict["train_files"] = [arg_dict["train_files"]]
 
@@ -397,8 +404,8 @@ def main():
     if "test_files" in arg_dict and not isinstance(arg_dict["test_files"], list):
         arg_dict["test_files"] = [arg_dict["test_files"]]
 
+    # Update the parameters set with explicitly set parameters
     params = PARAMS_MAP[arg_dict["param_set"]]
-
     params.update(filtered)
 
     print(params, flush=True)

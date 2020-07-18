@@ -118,12 +118,8 @@ def add_mask_mock(inputs, input_categories, targets, target_categories, target_p
     masked_input = tf.ones_like(inputs[0])
     masked_input = tf.expand_dims(masked_input, axis=0)
     inputs = tf.concat([masked_input, inputs], axis=0)
-    logger = tf.get_logger()
     if true_mask_category:
         masked_category = target_categories[0]
-        # all_same = tf.foldl(lambda a, x: tf.logical_and(tf.equal(x, masked_category), a), target_categories,
-        #                     initializer=tf.constant([True]))
-        # tf.debugging.assert_equal(all_same, tf.constant([True]))
         masked_category = tf.expand_dims(masked_category, axis=0)
     else:
         masked_category = tf.constant([0], dtype=tf.int32)

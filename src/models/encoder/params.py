@@ -97,7 +97,6 @@ MP_CONCAT.update(
     }
 )
 
-
 MP_NEG = MP_MUL.copy()
 MP_NEG.update(
     {
@@ -107,8 +106,51 @@ MP_NEG.update(
     }
 )
 
+
+PO = BASE.copy()
+PO.update({
+    "train_files": [
+        "data/processed/tfrecords/pod-train-000-1.tfrecord"
+    ],
+    "test_files": ["data/processed/tfrecords/pod-fitb-features-test.tfrecord"],
+    "valid_files": ["data/processed/tfrecords/pod-fitb-features-valid.tfrecord"],
+    "category_file": "data/raw/polyvore_outfits/categories.csv",
+    "categorywise_train": True,
+    "category_embedding": False,
+    "valid_mode": "fitb",
+    "batch_size": 96,
+    "learning_rate": 0.002,
+    "layer_postprocess_dropout": 0.1,
+    "i_dense_dropout": 0.1,
+    "dense_regularization": 0,
+    "attention_dropout": 0.1,
+    "relu_dropout": 0.1,
+    "emb_dropout": 0,
+})
+
+PO_CATEGORY = PO.copy()
+PO_CATEGORY.update({
+    "category_embedding": True,
+    "with_mask_category_embedding": True,
+})
+
+PO_ADD = PO_CATEGORY.copy()
+PO_ADD.update({
+    "category_merge": "add"
+})
+
+PO_MUL = PO_CATEGORY.copy()
+PO_MUL.update({
+    "category_merge": "mul"
+})
+
+PO_CONCAT = PO_CATEGORY.copy()
+PO_CONCAT.update({
+    "category_merge": "concat"
+})
+
 DISTANCE_BASE = BASE.copy()
 DISTANCE_BASE.update(
     loss="distance",
-    margin="0.5"
+    margin="5"
 )

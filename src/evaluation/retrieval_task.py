@@ -16,10 +16,8 @@ class Recommender(ABC):
 
 class FashionEncoderRec(Recommender):
 
-
-
-    def __init__(self, model_path):
-        model = tf.keras.models.load_model(model_path)  # type: tf.keras.models.Model
+    def __init__(self, model):
+        self.model = model
         self._preprocessor = model.get_layer("preprocessor")
 
     def get_nearest(self, outfit_item_ids, category, count):
