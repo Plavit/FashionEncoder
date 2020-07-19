@@ -74,7 +74,7 @@ class FashionPreprocessorV2(tf.keras.Model):
 
         dense_size = params["hidden_size"]
 
-        if "category_embedding" in params:
+        if "category_embedding" in params and params["category_embedding"]:
             if params["category_merge"] == "add":
                 self.category_embedding = layers.CategoryAdder(params)
             elif params["category_merge"] == "multiply":
@@ -263,15 +263,12 @@ class FashionEncoder(tf.keras.Model):
                 logger.debug("Transformer inputs")
                 logger.debug(inputs)
 
-            # Calculate attention bias for encoder self-attention and decoder
-            # multi-headed attention layers.
-            # reduced_inputs = tf.equal(categories, 0)   #TODO: Is this needed?
-            #reduced_inputs = tf.reduce_all(reduced_inputs, axis=2)
-
             attention_bias = model_utils.get_padding_bias(categories, 0)
 
-            # TODO: Code for keys from categories
-            one_hot_categories = tf.one_hot(categories, self.params["categories_count"])
+            if "category_attention" in self.params and self.params["category_attention"]:
+                one_hot_categories = tf.one_hot(categories, self.params["categories_count"])
+            else:
+                one_hot_categories = None
 
             if self.params["mode"] == "debug":
                 logger.debug("Categories")
@@ -279,12 +276,9 @@ class FashionEncoder(tf.keras.Model):
                 logger.debug("One hot")
                 logger.debug(one_hot_categories)
 
-            output = self.encode(inputs, categories, attention_bias, training)
+            output = self.encode(inputs, one_hot_categories, attention_bias, training)
 
             self.add_loss(self.activity_regularizer(output))
-
-            # if self.params["hidden_size"] != self.params["feature_dim"]:
-            #     output = self.output_dense(output, training=training)
 
             return output
 
@@ -447,7 +441,7 @@ class EncoderStack(tf.keras.layers.Layer):
             with tf.name_scope("layer_%d" % n):
                 with tf.name_scope("self_attention"):
                     encoder_inputs = self_attention_layer(
-                        encoder_inputs, None, attention_bias, training=training)  # TODO: Categories set to None
+                        encoder_inputs, categories, attention_bias, training=training)  # TODO: Categories set to None
                 with tf.name_scope("ffn"):
                     encoder_inputs = feed_forward_network(
                         encoder_inputs, training=training)

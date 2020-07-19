@@ -326,16 +326,17 @@ class Attention(tf.keras.layers.Layer):
     # projections. Splitting heads is automatically done during the linear
     # projections --> [batch_size, length, num_heads, dim_per_head].
     logger = tf.get_logger()
-    query = self.query_dense_layer(query_input)
 
     if categories is not None:
         key = self.key_dense_layer(categories)
+        query = self.query_dense_layer(categories)
         logger.debug("One hot categories")
         logger.debug(categories)
         logger.debug("Keys")
         logger.debug(key)
     else:
         key = self.key_dense_layer(source_input)
+        query = self.query_dense_layer(query_input)
 
     value = self.value_dense_layer(source_input)
 

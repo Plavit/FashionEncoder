@@ -117,6 +117,7 @@ PO.update({
     "category_file": "data/raw/polyvore_outfits/categories.csv",
     "categorywise_train": True,
     "category_embedding": False,
+    "with_category_grouping": True,
     "valid_mode": "fitb",
     "batch_size": 96,
     "learning_rate": 0.002,
@@ -126,6 +127,7 @@ PO.update({
     "attention_dropout": 0.1,
     "relu_dropout": 0.1,
     "emb_dropout": 0,
+    "category_attention": False
 })
 
 PO_CATEGORY = PO.copy()
@@ -141,7 +143,7 @@ PO_ADD.update({
 
 PO_MUL = PO_CATEGORY.copy()
 PO_MUL.update({
-    "category_merge": "mul"
+    "category_merge": "multiply"
 })
 
 PO_CONCAT = PO_CATEGORY.copy()

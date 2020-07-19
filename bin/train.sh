@@ -23,30 +23,30 @@
 #  --epoch-count 100 \
 #  --with-category-grouping False \
 #  --batch-size 128
-#
+
 #python -m "src.models.encoder.encoder_main" \
 #  --mode "train" \
-#  --param-set "MP_ADD" \
+#  --param-set "MP_CONCAT" \
 #  --category-dim 128 \
 #  --num-heads 32 \
-#  --hidden-size 128 \
-#  --filter-size 256 \
+#  --hidden-size 256 \
+#  --filter-size 512 \
 #  --num-hidden-layers 2 \
 #  --epoch-count 100 \
-#  --with-category-grouping False \
-#  --batch-size 128
+#  --with-category-grouping False
 
 python -m "src.models.encoder.encoder_main" \
   --mode "train" \
   --param-set "PO" \
   --num-heads 32 \
-  --category-dim 128 \
+  --category-dim 32 \
   --hidden-size 128 \
   --filter-size 256  \
-  --num-hidden-layers 1 \
+  --num-hidden-layers 2 \
   --epoch-count 100
 
-
+#
+#
 #python -m "src.models.encoder.param_tuning"
 
 #python -m "src.models.encoder.encoder_main" \

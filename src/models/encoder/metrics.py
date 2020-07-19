@@ -139,22 +139,22 @@ def get_distances_to_targets(y_pred, y_true, mask_positions, categories, debug=F
 
     targets = tf.reshape(y_true, [-1, y_true.shape[-1]])  # (total_count, hidden_size)
 
-    cat_mask = None
+    # cat_mask = None
+    #
+    # if categories is not None:
+    #     flat_categories = tf.reshape(categories, [-1])
+    #     cat_mask = tf.equal(flat_categories[:, tf.newaxis], flat_categories[tf.newaxis, :])
+    #     cat_mask = tf.logical_not(cat_mask)
+    #     cat_mask = tf.cast(cat_mask, dtype="float32")
+    #     cat_mask = cat_mask * _INF_FP32
+    #     # (batch_size, batch_size, seq_length, 1)
+    #     cat_mask = tf.reshape(cat_mask, (-1, 1))
+    #     cat_mask = tf.tile(cat_mask, [1, y_pred[-1]])
+    #     if debug:
+    #         logger.debug("Category Mask")
+    #         logger.debug(cat_mask)
 
-    if categories is not None:
-        flat_categories = tf.reshape(categories, [-1])
-        cat_mask = tf.equal(flat_categories[:, tf.newaxis], flat_categories[tf.newaxis, :])
-        cat_mask = tf.logical_not(cat_mask)
-        cat_mask = tf.cast(cat_mask, dtype="float32")
-        cat_mask = cat_mask * _INF_FP32
-        # (batch_size, batch_size, seq_length, 1)
-        cat_mask = tf.reshape(cat_mask, (-1, 1))
-        cat_mask = tf.tile(cat_mask, [1, y_pred[-1]])
-        if debug:
-            logger.debug("Category Mask")
-            logger.debug(cat_mask)
-
-    dist = distances(predictions, targets, cat_mask)
+    dist = distances(predictions, targets, None)
     dist = tf.reshape(dist, (dist.shape[0], y_true.shape[0], -1))  # (batch_size, batch_size, seq_length)
 
     dist_to_pos = tf.gather_nd(dist, indices, 1)  # (batch_size,)
@@ -211,8 +211,8 @@ def outfit_distance_loss(y_pred, y_true, categories, mask_positions, margin, acc
     margin = tf.constant(margin)
     margin = tf.repeat(margin, dist_to_pos.shape[0])
 
-    loss = dist_to_pos + dist_to_neg + margin
-    loss = tf.maximum(loss, 0)
+    loss = dist_to_pos - dist_to_neg + margin
+    loss = tf.maximum(loss, 0) + dist_to_pos
 
     if debug:
         logger.debug("Distance losses")

@@ -3,7 +3,7 @@
 Outfit recommendation model base on the Transformer's encoder.
 
 ## Docs
-- [Report](docs/Report.md)
+- [User Documentation](docs/UserDocumentation.md)
 
 ## Data Sources
 - [Maryland Polyvore](https://github.com/xthan/polyvore-dataset) 
@@ -16,9 +16,6 @@ For seamless experience we recommend to use `enviroment.yml` to create a conda e
 - scipy
 - jupyter
 - keras-tuner
-
-## Results
-
 
 ## Project Organization
 

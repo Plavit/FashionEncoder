@@ -155,11 +155,11 @@ class EncoderTask:
             targets = tf.stop_gradient(targets) if stop_targets_gradient else ret[1]
             if self.params["loss"] == "cross":
                 loss_value = metrics.xentropy_loss(
-                    outputs, tf.stop_gradient(targets),
+                    outputs, targets,
                     inputs[1], inputs[2], acc, categorywise_only=self.params["categorywise_train"]) / num_replicas
             elif self.params["loss"] == "distance":
                 loss_value = metrics.outfit_distance_loss(
-                    outputs, tf.stop_gradient(targets), inputs[1], inputs[2], self.params["margin"], acc) \
+                    outputs, targets, inputs[1], inputs[2], self.params["margin"], acc) \
                              / num_replicas
             else:
                 raise RuntimeError("Unexpected loss function")
