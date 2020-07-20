@@ -22,6 +22,7 @@ PARAMS_MAP = {
     "PO_ADD": params_sets.PO_ADD,
     "PO_MUL": params_sets.PO_MUL,
     "PO_CONCAT": params_sets.PO_CONCAT,
+    "PO_MASK": params_sets.PO_MASK
 }
 
 

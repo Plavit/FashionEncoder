@@ -136,6 +136,13 @@ PO_CATEGORY.update({
     "with_mask_category_embedding": True,
 })
 
+PO_MASK = PO_CATEGORY.copy()
+PO_MASK.update({
+    "all_mask_category": True,
+    "category_attention": True,
+    "category_merge": "multiply"
+})
+
 PO_ADD = PO_CATEGORY.copy()
 PO_ADD.update({
     "category_merge": "add"

@@ -78,7 +78,6 @@ def compute_padding_mask_from_categories(categories):
 
 def place_tensor_on_positions(inputs, tensor_to_place, positions, repeated=True):
     if repeated:
-        # repeated = tf.repeat(tensor_to_place, tf.shape(positions)[0])
         repeated = tf.expand_dims(tensor_to_place, 0)
         # Repeat the tensor_to_place to match the count of positions
         repeated = tf.tile(repeated, [tf.shape(positions)[0], 1])
@@ -91,6 +90,14 @@ def place_tensor_on_positions(inputs, tensor_to_place, positions, repeated=True)
     indices = tf.concat([r, positions], axis=-1)
     indices = tf.squeeze(indices, axis=[1])
     return tf.tensor_scatter_nd_update(inputs, indices, updates)
+
+
+def generate_mask_categories(categories, mask_positions):
+    mask_positions = tf.squeeze(mask_positions, axis=[1])
+    mask_categories = tf.gather_nd(categories, mask_positions, batch_dims=1)
+    mask_categories = tf.expand_dims(mask_categories, axis=1)
+    mask_categories = tf.tile(mask_categories, [1, tf.shape(categories)[1]])
+    return mask_categories
 
 
 class EarlyStoppingMonitor:

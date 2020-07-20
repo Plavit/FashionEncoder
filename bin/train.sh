@@ -39,9 +39,9 @@ python -m "src.models.encoder.encoder_main" \
   --mode "train" \
   --param-set "PO" \
   --num-heads 32 \
-  --category-dim 32 \
-  --hidden-size 128 \
-  --filter-size 256  \
+  --category-dim 64 \
+  --hidden-size 64 \
+  --filter-size 128  \
   --num-hidden-layers 2 \
   --epoch-count 100
 

@@ -136,7 +136,11 @@ class FashionPreprocessorV2(tf.keras.Model):
         # Merge image features with category embedding
         if self.params["category_embedding"]:
             training_targets = self._add_category_embedding(training_targets, categories, None)
-            masked_inputs = self._add_category_embedding(masked_inputs, categories, mask_positions)
+            if "all_mask_category" in self.params and self.params["all_mask_category"]:
+                mask_categories = utils.generate_mask_categories(categories, mask_positions)
+                masked_inputs = self._add_category_embedding(masked_inputs, mask_categories, mask_positions)
+            else:
+                masked_inputs = self._add_category_embedding(masked_inputs, categories, mask_positions)
 
             if self.params["mode"] == "debug":
                 logger.debug("Masked inputs with categories")
