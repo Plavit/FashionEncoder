@@ -107,13 +107,9 @@ MP_NEG.update(
 )
 
 
-PO = BASE.copy()
-PO.update({
-    "train_files": [
-        "data/processed/tfrecords/pod-train-000-1.tfrecord"
-    ],
-    "test_files": ["data/processed/tfrecords/pod-fitb-features-test.tfrecord"],
-    "valid_files": ["data/processed/tfrecords/pod-fitb-features-valid.tfrecord"],
+PO_BASE = BASE.copy()
+PO_BASE.update({
+
     "category_file": "data/raw/polyvore_outfits/categories.csv",
     "categorywise_train": True,
     "category_embedding": False,
@@ -127,20 +123,36 @@ PO.update({
     "attention_dropout": 0.1,
     "relu_dropout": 0.1,
     "emb_dropout": 0,
-    "category_attention": False
+    "category_attention": True
 })
+
+PO = PO_BASE.copy()
+PO.update({
+    "train_files": ["data/processed/tfrecords/po-features-train-000-0.tfrecord"],
+    "test_files": ["data/processed/tfrecords/po-fitb-features-test.tfrecord"],
+    "valid_files": ["data/processed/tfrecords/po-fitb-features-valid.tfrecord"],
+})
+
+POD = PO_BASE.copy()
+POD.update({
+    "train_files": ["data/processed/tfrecords/pod-train-000-1.tfrecord"],
+    "test_files": ["data/processed/tfrecords/pod-fitb-features-test.tfrecord"],
+    "valid_files": ["data/processed/tfrecords/pod-fitb-features-valid.tfrecord"],
+})
+
 
 PO_CATEGORY = PO.copy()
 PO_CATEGORY.update({
     "category_embedding": True,
     "with_mask_category_embedding": True,
+    "category_attention": False
 })
 
-PO_MASK = PO_CATEGORY.copy()
-PO_MASK.update({
-    "all_mask_category": True,
-    "category_attention": True,
-    "category_merge": "multiply"
+POD_CATEGORY = POD.copy()
+POD_CATEGORY.update({
+    "category_embedding": True,
+    "with_mask_category_embedding": True,
+    "category_attention": False
 })
 
 PO_ADD = PO_CATEGORY.copy()
@@ -158,8 +170,17 @@ PO_CONCAT.update({
     "category_merge": "concat"
 })
 
-DISTANCE_BASE = BASE.copy()
-DISTANCE_BASE.update(
-    loss="distance",
-    margin="5"
-)
+POD_ADD = POD_CATEGORY.copy()
+POD_ADD.update({
+    "category_merge": "add"
+})
+
+POD_MUL = POD_CATEGORY.copy()
+POD_MUL.update({
+    "category_merge": "multiply"
+})
+
+POD_CONCAT = POD_CATEGORY.copy()
+POD_CONCAT.update({
+    "category_merge": "concat"
+})

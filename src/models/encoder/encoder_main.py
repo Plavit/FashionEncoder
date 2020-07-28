@@ -22,16 +22,37 @@ PARAMS_MAP = {
     "PO_ADD": params_sets.PO_ADD,
     "PO_MUL": params_sets.PO_MUL,
     "PO_CONCAT": params_sets.PO_CONCAT,
-    "PO_MASK": params_sets.PO_MASK
+    "POD": params_sets.POD,
+    "POD_ADD": params_sets.POD_ADD,
+    "POD_MUL": params_sets.POD_MUL,
+    "POD_CONCAT": params_sets.POD_CONCAT,
 }
 
 
 class EncoderTask:
+    """A class that manages training and evaluation of the Fashion Encoder model"""
 
     def __init__(self, params):
+        """
+        Set the hyperparameters
+
+        Args:
+            params: hyperparameter object defining layer sizes, dropout values, etc.
+        """
         self.params = params
 
     def fitb(self, model, dataset):
+        """
+        Evaluate the model on the FITB task
+
+        Args:
+            model: model for evaluation
+            dataset: FITB dataset
+
+        Returns: Reached FITB accuracy
+
+        """
+
         if self.params["loss"] == "cross":
             acc = tf.metrics.CategoricalAccuracy()
         elif self.params["loss"] == "distance":
@@ -46,26 +67,41 @@ class EncoderTask:
             self.fitb_step(model, preprocessor, task, mask, acc)
         return acc.result()
 
-    def fitb_step(self, model, preprocessor, task, mask, acc=None):
+    def fitb_step(self, model, preprocessor, task, mask_pos, acc=None):
+        """
+        Evaluate one sample of the FITB task
+
+        Args:
+            model: model for evaluation
+            preprocessor: preprocessor component
+            task: one sample from the dataset
+            mask_pos: position of the mask token
+            acc: corresponding accuracy class
+        """
+
         logger = tf.get_logger()
         inputs, input_categories, targets, target_categories, target_position = task
-        logger.debug("Targets")
-        logger.debug(targets)
-        _, targets = preprocessor([targets, target_categories, mask], training=False)
-        res = model([inputs, input_categories, mask], training=False)
-        outputs = res[0]
 
-        logger.debug("Processed targets")
-        logger.debug(targets)
-        logger.debug("Outputs")
-        logger.debug(outputs)
+        if self.params["mode"] == "debug":
+            logger.debug("Targets")
+            logger.debug(targets)
+
+        _, targets = preprocessor([targets, target_categories, mask_pos], training=False)  # The first item is masked
+        res = model([inputs, input_categories, mask_pos], training=False)
+        outputs = res[0]  # Encoded inputs
+
+        if self.params["mode"] == "debug":
+            logger.debug("Processed targets")
+            logger.debug(targets)
+            logger.debug("Outputs")
+            logger.debug(outputs)
 
         debug = self.params["mode"] == "debug"
 
         if self.params["loss"] == "cross":
-            metrics.fitb_acc(outputs, targets, mask, target_position, input_categories, acc, debug)
+            metrics.fitb_acc(outputs, targets, mask_pos, target_position, input_categories, acc, debug)
         elif self.params["loss"] == "distance":
-            metrics.outfit_distance_fitb(outputs, targets, mask, target_position, input_categories, acc, debug)
+            metrics.outfit_distance_fitb(outputs, targets, mask_pos, target_position, input_categories, acc, debug)
         else:
             raise RuntimeError("Unexpected loss function")
 
@@ -175,7 +211,7 @@ class EncoderTask:
             if "category_file" in self.params:
                 lookup = utils.build_po_category_lookup_table(self.params["category_file"])
             else:
-                lookup = utils.build_category_lookup_table()
+                lookup = utils.build_mp_category_lookup_table()
 
         train_dataset = input_pipeline.get_training_dataset(self.params["train_files"],
                                                             self.params["batch_size"],

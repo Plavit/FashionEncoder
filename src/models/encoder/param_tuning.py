@@ -13,7 +13,7 @@ class FashionModelTuner(kt.Tuner):
         params = model.get_layer("encoder").params
 
         if "checkpoint_dir" in params:
-            del params["checkpoint_dir"]  # TODO: Do not set parameters during training
+            del params["checkpoint_dir"]  # Do not use checkpoints
 
         task = EncoderTask(params)
         print(params, flush=True)
@@ -53,22 +53,12 @@ def build(hp: kt.HyperParameters):
 def main():
     hp = kt.HyperParameters()
 
-    # hp.Choice("layer_postprocess_dropout", [0.05, 0.1, 0.2], default=0.1)
-    # hp.Choice("attention_dropout", [0.05, 0.1, 0.2], default=0.1)
-    # hp.Choice("relu_dropout", [0.05, 0.1, 0.2], default=0.1)
-    # hp.Choice("dense_regularization", [0.0005, 0.001, 0.005], default=0.001)
-    hp.Choice("learning_rate", [0.002, 0.001, 0.0005, 0.0002], default=0.001)
-    hp.Choice("batch_size", [32, 64, 96, 128], default=128)
-    # hp.Choice("emb_dropout", [0.05, 0.1, 0.2, 0.3], default=0.1)
-    # hp.Choice("i_dense_dropout", [0.05, 0.1, 0.2, 0.3], default=0.1)
-
     current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
     tuner = FashionModelTuner(
         oracle=kt.oracles.BayesianOptimization(
             objective=kt.Objective("acc", "max"),
             max_trials=100,
-            tune_new_entries=False,
             hyperparameters=hp
         ),
         hypermodel=build,

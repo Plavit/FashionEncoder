@@ -1,23 +1,9 @@
-# Copyright 2018 The TensorFlow Authors. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
+"""Defines the Fashion Encoder model in TF 2.0.
 
-"""Defines the Fashion Outfit Encoder model in TF 2.0.
-
-Model paper: https://arxiv.org/pdf/1706.03762.pdf
-Transformer model code source: https://github.com/tensorflow/tensor2tensor
+The Transformer paper: https://arxiv.org/pdf/1706.03762.pdf
+Transformer model code source: https://github.com/tensorflow/models/tree/master/official/nlp/transformer
 """
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -31,7 +17,12 @@ import src.models.encoder.utils as utils
 
 
 def create_model(params, is_train):
-    """Creates a Fashion Encoder model."""
+    """Creates a Fashion Encoder model.
+
+    Args:
+        params: hyperparameter object defining layer sizes, dropout values, etc.
+        is_train: boolean, whether in training mode or not.
+    """
     with tf.name_scope("model"):
 
         categories = tf.keras.layers.Input((None,), dtype="int32", name="categories")
@@ -49,10 +40,12 @@ def create_model(params, is_train):
         internal_model = FashionEncoder(params, name="encoder")
         ret = internal_model([encoder_inputs, categories], training=is_train)
 
+        # The model returns the training targets for optimized training
         return tf.keras.Model([inputs, categories, mask_positions], [ret, training_targets])
 
 
 class FashionPreprocessorV2(tf.keras.Model):
+    """Preprocessor component of the Fashion Encoder"""
 
     def __init__(self, params, name=None):
         """Initialize layers to build preprocessor.
@@ -72,8 +65,6 @@ class FashionPreprocessorV2(tf.keras.Model):
         elif self.params["masking_mode"] == "category-masking":
             self.masking_layer = layers.CategoryMasking(params)
 
-        dense_size = params["hidden_size"]
-
         if "category_embedding" in params and params["category_embedding"]:
             if params["category_merge"] == "add":
                 self.category_embedding = layers.CategoryAdder(params)
@@ -81,35 +72,26 @@ class FashionPreprocessorV2(tf.keras.Model):
                 self.category_embedding = layers.CategoryMultiplier(params)
             elif params["category_merge"] == "concat":
                 self.category_embedding = layers.CategoryConcater(params)
-                dense_size = params["hidden_size"] - params["category_dim"]
 
-        i_dense = tf.keras.layers.Dense(dense_size, activation=lambda x: tf.nn.leaky_relu(x),
-                                        input_shape=(None, None, self.params["feature_dim"]), name="dense_input",
-                                        activity_regularizer=tf.keras.regularizers.l2(self.params["dense_regularization"])
-                                        )
-
-        self.input_dense = DenseLayerWrapper(i_dense, params)
+        self.input_dense = InputDenseLayerWrapper(params)
 
     def _add_category_embedding(self, inputs, categories, mask_positions):
         return self.category_embedding([inputs, categories, mask_positions])
 
     def call(self, inputs, *args, **kwargs):
-        """Calculate target logits or inferred target sequences.
+        """Projects the inputs into the embedding space
 
         Args:
           inputs: input tensor list of size 3
             First item, inputs: float tensor
              - When using already extracted features with shape [batch_size, seq_length, feature_dim]
              - When using images with shape [batch_size, input_length, image_width, image_height, 3]
-            Second item, categories: int tensor with shape [batch_size, seq_length, feature_dim].
+            Second item, categories: int tensor with shape [batch_size, seq_length].
             Third item, mask positions: int tensor with shape [batch_size, seq_length, 1]
-          training: boolean, whether in training mode or not.
+          kwargs["training"]: boolean, whether in training mode or not.
 
         Returns:
-          Embedded outfits with shape [batch_size, seq_length, feature_dim]
-
-        Raises:
-          NotImplementedError: If try to use padded decode method on CPU/GPUs.
+          Embedded outfits with shape [batch_size, seq_length, hidden_size]
         """
 
         inputs, categories, mask_positions = inputs[0], inputs[1], inputs[2]
@@ -135,15 +117,18 @@ class FashionPreprocessorV2(tf.keras.Model):
 
         # Merge image features with category embedding
         if self.params["category_embedding"]:
+            # Embed the (not masked) targets
             training_targets = self._add_category_embedding(training_targets, categories, None)
+
             if "all_mask_category" in self.params and self.params["all_mask_category"]:
+                # Set all the categories of the outfit to the one of the masked item
                 mask_categories = utils.generate_mask_categories(categories, mask_positions)
                 masked_inputs = self._add_category_embedding(masked_inputs, mask_categories, mask_positions)
             else:
                 masked_inputs = self._add_category_embedding(masked_inputs, categories, mask_positions)
 
             if self.params["mode"] == "debug":
-                logger.debug("Masked inputs with categories")
+                logger.debug("Masked inputs with category embedding")
                 logger.debug(masked_inputs)
 
         return masked_inputs, training_targets
@@ -174,13 +159,15 @@ class CNNExtractor(tf.keras.Model):
             "params": self.params,
         }
 
-    def call(self, inputs):
+    def call(self, inputs, **kwargs):
         """
-        TODO: Documement
+        Extract visual features from images
+
         Args:
-            inputs: tuple (inputs, categories, mask_positions)
-              inputs - tensor of shape (batch_size, seq_length, 299, 299, 3)
-            training: T
+            inputs: input tensor list of size 3
+            First item, inputs: float tensor with shape [batch_size, input_length, image_width, image_height, 3]
+            Second item, categories: int tensor with shape [batch_size, seq_length].
+            Third item, mask positions: int tensor with shape [batch_size, seq_length, 1]
         """
         logger = tf.get_logger()
 
@@ -188,22 +175,31 @@ class CNNExtractor(tf.keras.Model):
         if self.params["mode"] == "debug":
             logger.debug(inputs)
 
-        mask_matrix = utils.compute_padding_mask_from_categories(categories)
-
         batch_size = tf.shape(inputs)[0]
         seq_length = tf.shape(inputs)[1]
 
+        # Reduce the dimensions and get the CNN embeddings
         inputs = tf.reshape(inputs, shape=(-1, 299, 299, 3))
         cnn_outputs = self.cnn_model(inputs)
+
+        # Set the padded inputs to zeros
+        mask_matrix = utils.compute_padding_mask_from_categories(categories)
         cnn_outputs = tf.einsum("ij,jk->ik", mask_matrix, cnn_outputs)
 
         if self.params["mode"] == "debug":
+            logger.debug("CNN outputs")
             logger.debug(cnn_outputs)
-        return tf.reshape(cnn_outputs, shape=(batch_size, seq_length, self.params["feature_dim"]))
+
+        # Reshape back
+        output = tf.reshape(cnn_outputs, shape=(batch_size, seq_length, self.params["feature_dim"]))
+        return output
 
 
 class FashionEncoder(tf.keras.Model):
-    """Encoder model with Keras.
+    """Transformer's Encoder Stack
+
+    Based on the Tensorflow Official Transformer implementation:
+    https://github.com/tensorflow/models/tree/master/official
 
     Implemented as described in: https://arxiv.org/pdf/1706.03762.pdf
     """
@@ -220,41 +216,24 @@ class FashionEncoder(tf.keras.Model):
 
         self.encoder_stack = EncoderStack(params)
 
-        if self.params["category_merge"] == "concat":
-            units = self.params["feature_dim"]  # + self.params["category_dim"]
-        else:
-            units = self.params["feature_dim"]
-
         self.activity_regularizer = tf.keras.regularizers.l2(self.params["enc_regularization"])
-        # o_dense = tf.keras.layers.Dense(units, activation=lambda x: tf.nn.leaky_relu(x),
-        #                                 name="dense_output")
-        # self.output_dense = DenseLayerWrapper(o_dense, params)
 
     def get_config(self):
         return {
             "params": self.params,
         }
 
-    def call(self, inputs, training):
-        """Calculate target logits or inferred target sequences.
+    def call(self, inputs, training, **kwargs):
+        """Encode the inputs sequence using the encoder stack
 
         Args:
           inputs: input tensor list of size 2.
-            First item, inputs: float tensor with shape [batch_size, seq_length, feature_dim].
+            First item, inputs: float tensor with shape [batch_size, seq_length, hidden_size].
             Second item, categories: None or float tensor with shape [batch_size, seq_length, 1].
           training: boolean, whether in training mode or not.
 
         Returns:
-          If targets is defined, then return logits for each word in the target
-          sequence. float tensor with shape [batch_size, target_length, feature_dim]
-          If target is none, then generate output sequence one token at a time.
-            returns a dictionary {
-              outputs: [batch_size, feature_dim]
-              scores: [batch_size, float]}
-          Even when float16 is used, the output tensor(s) are always float32.
-
-        Raises:
-          NotImplementedError: If try to use padded decode method on CPU/GPUs.
+          Encoded inputs of shape [batch_size, seq_length, hidden_size]
         """
 
         inputs, categories = inputs[0], inputs[1]
@@ -277,7 +256,7 @@ class FashionEncoder(tf.keras.Model):
             if self.params["mode"] == "debug":
                 logger.debug("Categories")
                 logger.debug(categories)
-                logger.debug("One hot")
+                logger.debug("One hot categories")
                 logger.debug(one_hot_categories)
 
             output = self.encode(inputs, one_hot_categories, attention_bias, training)
@@ -291,6 +270,10 @@ class FashionEncoder(tf.keras.Model):
 
         Args:
           inputs: float tensor with shape [batch_size, input_length, feature_dim].
+          categories: one of the following:
+                - None - the whole attention mechanism will work with the inputs
+                - one hot encoded categories with shape [batch_size, input_length, categories_count]
+                    - Key and Query vectors of the self-attention will be computed from the categories
           attention_bias: float tensor with shape [batch_size, 1, 1, input_length].
           training: boolean, whether in training mode or not.
 
@@ -345,17 +328,30 @@ class PrePostProcessingWrapper(tf.keras.layers.Layer):
         return x + y
 
 
-class DenseLayerWrapper(tf.keras.layers.Layer):
+class InputDenseLayerWrapper(tf.keras.layers.Layer):
     """Wrapper class that applies layer dropout."""
 
-    def __init__(self, layer, params):
-        super(DenseLayerWrapper, self).__init__()
-        self.layer = layer
+    def __init__(self, params):
+        super(InputDenseLayerWrapper, self).__init__()
+
+        if "category_embedding" in params and \
+                params["category_embedding"] and \
+                params["category_merge"] == "concat":
+            dense_size = params["hidden_size"] - params["category_dim"]
+        else:
+            dense_size = params["hidden_size"]
+
+        self.layer = tf.keras.layers.Dense(dense_size,
+                                           activation=lambda x: tf.nn.leaky_relu(x),
+                                           input_shape=(None, None, self.params["feature_dim"]),
+                                           name="dense_input",
+                                           activity_regularizer=
+                                           tf.keras.regularizers.l2(self.params["dense_regularization"]))
         self.params = params
         self.postprocess_dropout = params["i_dense_dropout"]
 
     def build(self, input_shape):
-        super(DenseLayerWrapper, self).build(input_shape)
+        super(InputDenseLayerWrapper, self).build(input_shape)
 
     def get_config(self):
         return {
@@ -374,7 +370,6 @@ class DenseLayerWrapper(tf.keras.layers.Layer):
             logger.debug(y)
         # Postprocessing: apply dropout
         if training:
-
             y = tf.nn.dropout(y, rate=self.postprocess_dropout)
             if self.params["mode"] == "debug":
                 logger.debug("Dense dropout applied")
@@ -429,6 +424,10 @@ class EncoderStack(tf.keras.layers.Layer):
 
         Args:
           encoder_inputs: tensor with shape [batch_size, input_length, hidden_size]
+          categories: one of the following
+                - None - the whole attention mechanism will work with the inputs
+                - one hot encoded categories with shape [batch_size, input_length, categories_count]
+                    - Key and Query vectors of the self-attention will be computed from the categories
           attention_bias: bias for the encoder self-attention layer. [batch_size, 1,
             1, input_length]
           training: boolean, whether in training mode or not.
@@ -445,7 +444,7 @@ class EncoderStack(tf.keras.layers.Layer):
             with tf.name_scope("layer_%d" % n):
                 with tf.name_scope("self_attention"):
                     encoder_inputs = self_attention_layer(
-                        encoder_inputs, categories, attention_bias, training=training)  # TODO: Categories set to None
+                        encoder_inputs, categories, attention_bias, training=training)
                 with tf.name_scope("ffn"):
                     encoder_inputs = feed_forward_network(
                         encoder_inputs, training=training)

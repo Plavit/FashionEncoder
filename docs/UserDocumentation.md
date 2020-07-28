@@ -1,11 +1,11 @@
-# Fashion Encoder - User Documentation
+# Fashion Encoder Training - User Documentation
 ---
 
 This is a user documentation for a package designated for training a evaluating models based on Fashion Encoder architecture.
 
 ## Table of Contents
 1. [Enviroment Setup](#environment-setup)
-2. [Preparation of the Datasets](#prepare-dataset)
+2. [Preparation of the Datasets](#prepare-datasets)
 3. [Running Experiments](#running-experiments)
 
 
@@ -14,7 +14,7 @@ This is a user documentation for a package designated for training a evaluating 
 We tested this package using conda environment manager, so we recommend using it. However, you should be able to install the dependencies manually.
 
 __Hardware requirements:__
-To run the experiments, we recommend using GPU with CUDA support as the model contains a convolutional neural network. We ran the experiments on NVIDIA Tesla V100 16/32GB.
+To run the experiments, we recommend using GPU with CUDA support as the model contains a convolutional neural network. We tested the experiments on NVIDIA Tesla V100 16/32GB.
 
 __Software requirements:__
 When using conda, you don't need to install any aditional software such as CUDA SDK (conda takes care of this).
@@ -30,7 +30,7 @@ When using conda, you don't need to install any aditional software such as CUDA 
 In case, you can't use conda, you will need to install these dependencies:
 
 - Python 3.7
-- Tensorflow >= 2.1 (preferably GPU version)
+- Tensorflow >= 2.1 (preferably the GPU version)
 - pillow
 - scipy
 - jupyter
@@ -41,34 +41,55 @@ In case, you can't use conda, you will need to install these dependencies:
 ## Prepare Datasets
 Before running the experiment you will need to download and build the datasets.
 
-### Download Maryland Polyvore
+### 1. Download the Datasets
+
+#### Download Maryland Polyvore
 1. Download Maryland Polyvore Dataset from this link __TODO__
-2. Move the folder `maryland_polyvore` into `data/raw`
+2. Move the folder `maryland` into `data/raw`
 3. Download the images from Maryland Polyvore dataset from this link [https://www.kaggle.com/dnepozitek/maryland-polyvore-images](https://www.kaggle.com/dnepozitek/maryland-polyvore-images)
-4. Move the folder `images` into `data/raw/maryland_polyvore`
+4. Move the folder `images` into `data/raw/maryland`
 
 
-### Download Polyvore Outfits
+#### Download Polyvore Outfits
 1. Download Polyvore Outfits dataset from this link __TODO__
 2. Move the whole folder `polyvore_outfits` into `data/raw/`
 
 
-### Build the TFRecord Datasets
-In order to run the experiments, it is first needed to build the TFRecord datasets form the raw files. 
+### 2. Build the TFRecord Datasets
+
+We have prepaited scripts to build the datasets in the `bin` folder. You can execute the following commands to build the corresponding datasets:
+- `bin/build_mp.sh`
+- `bin/build_mp_images.sh`
+- `bin/build_po.sh`
+- `bin/build_po_images.sh`
+- `bin/build_pod.sh`
+- `bin/build_pod_images.sh`
+
+Each script builds a training dataset, a validation FITB task and a test FITB task. The names have the following meaning: `mp` stands for Maryland Polyvore, `po` is Polyvore Outfits and `pod` is Polyvore Outfits Disjoint. The scripts with its names ending with `_images.sh` build the datasets with raw images, the other scripts extracts the visual features from the images using InceptionV3.
+
+> Note that the building the dataset may take a few hours
 
 
-If you want to replicate the experiments done in our thesis, it is sufficient 
-
-#### Build the Datasets with Features Extracted via CNN
-
-
-
-
-#### Build the Training Datasets with Images (optional)
-If you want to train the CNN together with the rest of the model you will need to build the datasets that contain images instead of extracted features.
-
+---
 
 ## Running Experiments
+
+> Make sure you have installed all the neccesary dependencies and that you have prepared the datasets before trying to run the experiments
+
+### Training
+In order to train and evaluate the model, you can use the `src.models.encoder.encoder_main` Python module.
+
+
+### Debugging
+We've found it handy to trace the 
+
+### Hyperparameter Tuning
+The hyperparameter tuning functionality is implemented in a module `src.models.encoder.param_tuning`. You can edit the `build` method to restrict the tuning to only some parameters or to modify the search space. As the file uses Keras Tuner in a straightforward way, we refer you to the official [Keras Tuner documentation](https://keras-team.github.io/keras-tuner/).
+
+To execute the hyperparameter tuning, run `bin/hypertuning.sh`.
+
+> We decided not to implement a CLI for the hyperparameter tuning because the Keras Tuner library provides a convenient way of setting up the tuning programmatically.
+
 
 ### Parameters
 

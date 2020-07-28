@@ -2,7 +2,7 @@ import argparse
 import json
 from pathlib import Path
 import tensorflow as tf
-import numpy as np
+import src.data.data_utils as utils
 
 
 def main():
@@ -52,31 +52,6 @@ def main():
     print("Saved the dataset successfully", flush=True)
 
 
-def _bytes_feature(value):
-    """Returns a bytes_list from a string / byte."""
-    if isinstance(value, type(tf.constant(0))):
-        value = value.numpy()  # BytesList won't unpack a string from an EagerTensor.
-    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
-
-
-def _float_feature(value):
-    """Returns a float_list from a float / double."""
-    return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
-
-
-def _int64_feature(value):
-    """Returns an int64_list from a bool / enum / int / uint."""
-    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
-
-
-def extract_features(model: tf.keras.Model, path):
-    img = tf.keras.preprocessing.image.load_img(path, target_size=(299, 299))
-    img_array = tf.keras.preprocessing.image.img_to_array(img)
-    img_array = np.expand_dims(img_array, axis=0)
-    img_array = tf.keras.applications.inception_v3.preprocess_input(img_array)
-    return np.reshape(model.predict(img_array), 2048)
-
-
 def process_dataset(dataset_root, dataset_filepath, with_features: bool = False, model_path=None):
     with open(Path(dataset_root, "polyvore_item_metadata.json")) as json_file:
         metadata = json.load(json_file)
@@ -100,7 +75,7 @@ def process_dataset(dataset_root, dataset_filepath, with_features: bool = False,
                 ids.append(int(item["item_id"]))
                 image_path = Path(dataset_root, "images", str(item["item_id"]) + ".jpg")
                 if with_features:
-                    features = extract_features(model, image_path)
+                    features = utils.extract_features(model, image_path)
                     images.append(features)
                 else:
                     with open(image_path, "rb") as img_file:
@@ -111,16 +86,16 @@ def process_dataset(dataset_root, dataset_filepath, with_features: bool = False,
 
             if with_features:
                 outfit_features = {
-                    "categories": tf.train.FeatureList(feature=[_int64_feature(f) for f in categories]),
-                    "ids": tf.train.FeatureList(feature=[_int64_feature(f) for f in ids]),
+                    "categories": tf.train.FeatureList(feature=[utils.int64_feature(f) for f in categories]),
+                    "ids": tf.train.FeatureList(feature=[utils.int64_feature(f) for f in ids]),
                     "features": tf.train.FeatureList(
                         feature=[tf.train.Feature(float_list=tf.train.FloatList(value=f)) for f in images])
                 }
             else:
                 outfit_features = {
-                    "categories": tf.train.FeatureList(feature=[_int64_feature(f) for f in categories]),
-                    "ids": tf.train.FeatureList(feature=[_int64_feature(f) for f in ids]),
-                    "images": tf.train.FeatureList(feature=[_bytes_feature(f) for f in images])
+                    "categories": tf.train.FeatureList(feature=[utils.int64_feature(f) for f in categories]),
+                    "ids": tf.train.FeatureList(feature=[utils.int64_feature(f) for f in ids]),
+                    "images": tf.train.FeatureList(feature=[utils.bytes_feature(f) for f in images])
                 }
 
             feature_lists = tf.train.FeatureLists(feature_list=outfit_features)

@@ -22,7 +22,7 @@ def xentropy_loss(y_pred, y_true, categories, mask_positions, acc=None, debug=Fa
     weights = tf.reshape(weights, [-1])
     weights_sum = tf.reduce_sum(weights)
 
-    # Reshape to batch (size * seq length, feature dim)
+    # Reshape to batch [size * seq length, feature dim]
     pred_batch = tf.reshape(y_pred, [-1, feature_dim])
     true_batch = tf.reshape(y_true, [-1, feature_dim])
     item_count = tf.shape(true_batch)[0]
@@ -50,7 +50,7 @@ def xentropy_loss(y_pred, y_true, categories, mask_positions, acc=None, debug=Fa
         logger.debug("Logits")
         logger.debug(logits)
 
-    # One-hot labels (the indentity matrix)
+    # One-hot labels (indentity matrix)
     labels = tf.eye(item_count, item_count)
 
     if acc is not None:
@@ -99,7 +99,7 @@ def fitb_acc(y_pred, y_true, pred_positions, target_position, categories, acc: t
     logger.debug(logits)
 
     pred_position = tf.squeeze(pred_positions, axis=[0, 1])
-    # One-hot labels (the indentity matrix)
+    # One-hot labels (indentity matrix)
     target_position = tf.cast(target_position, dtype="int32")
     sparse_indices = tf.concat([pred_position, target_position], axis=0)
     sparse_indices = tf.expand_dims(sparse_indices, axis=0)
@@ -139,21 +139,6 @@ def get_distances_to_targets(y_pred, y_true, mask_positions, categories, debug=F
 
     targets = tf.reshape(y_true, [-1, y_true.shape[-1]])  # (total_count, hidden_size)
 
-    # cat_mask = None
-    #
-    # if categories is not None:
-    #     flat_categories = tf.reshape(categories, [-1])
-    #     cat_mask = tf.equal(flat_categories[:, tf.newaxis], flat_categories[tf.newaxis, :])
-    #     cat_mask = tf.logical_not(cat_mask)
-    #     cat_mask = tf.cast(cat_mask, dtype="float32")
-    #     cat_mask = cat_mask * _INF_FP32
-    #     # (batch_size, batch_size, seq_length, 1)
-    #     cat_mask = tf.reshape(cat_mask, (-1, 1))
-    #     cat_mask = tf.tile(cat_mask, [1, y_pred[-1]])
-    #     if debug:
-    #         logger.debug("Category Mask")
-    #         logger.debug(cat_mask)
-
     dist = distances(predictions, targets, None)
     dist = tf.reshape(dist, (dist.shape[0], y_true.shape[0], -1))  # (batch_size, batch_size, seq_length)
 
@@ -166,7 +151,6 @@ def get_distances_to_targets(y_pred, y_true, mask_positions, categories, debug=F
     dist_to_neg = tf.tensor_scatter_nd_update(dist, indices, updates)
 
     dist_to_neg = tf.math.reduce_min(dist_to_neg, axis=[-2, -1])  # (batch_size,)
-    # TODO: Mean aggregation?
 
     if debug:
         logger.debug("Predictions")

@@ -1,6 +1,6 @@
 from pathlib import Path
 import tensorflow as tf
-import numpy as np
+import src.data.data_utils as utils
 import json
 import argparse
 
@@ -52,35 +52,19 @@ def main():
                 writer.close()
     print("Saved the dataset successfully", flush=True)
 
+def process_dataset(dataset_root: str, dataset_filename: str, with_features: bool = False, model_path: str = None):
+    """
+    Create list of Sequence Examples from the dataset
 
-def _bytes_feature(value):
-    """Returns a bytes_list from a string / byte."""
-    if isinstance(value, type(tf.constant(0))):
-        value = value.numpy()  # BytesList won't unpack a string from an EagerTensor.
-    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+    Args:
+        dataset_root: Path to the dataset root
+        dataset_filename: Filename of the dataset file
+        with_features: bool whether use CNN to extract features (or use raw images)
+        model_path: path to a CNN keras model to use for extraction (IncpetionV3 is used if None)
 
+    Returns: List of SequenceExample
 
-def _float_feature(value):
-    """Returns a float_list from a float / double."""
-    return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
-
-
-def _int64_feature(value):
-    """Returns an int64_list from a bool / enum / int / uint."""
-    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
-
-
-def extract_features(model: tf.keras.Model, path):
-    img = tf.keras.preprocessing.image.load_img(path, target_size=(299, 299))
-    img_array = tf.keras.preprocessing.image.img_to_array(img)
-    img_array = np.expand_dims(img_array, axis=0)
-    img_array = tf.keras.applications.inception_v3.preprocess_input(img_array)
-    return np.reshape(model.predict(img_array), 2048)
-
-
-def process_dataset(dataset_root, dataset_filename, with_features: bool = False, model_path=None):
-    # excluded_categories = [77, 76, 78, 113, 115, 116, 118, 120, 122, 123, 124, 126, 127, 129, 130, 132, 135, 136, 139, 140, 141, 143, 144, 4241, 4242, 147, 4244, 150, 4247, 4248, 153, 156, 154, 155, 157, 4254, 159, 160, 4257, 162, 163, 164, 166, 167, 168, 169, 170, 4267, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182, 231, 311, 313, 314, 316, 317, 321, 4432, 4433, 4437, 4439, 4440, 4441, 4442, 4443, 4445, 4446, 4448, 4449, 4450, 4451, 4478, 4480, 4481, 4482, 4483, 4484, 4485, 4486, 4487, 4488, 4489, 4490, 4492, 4493, 4499, 4500, 4501, 4502, 4503, 4504, 4505, 4506, 4507, 4508, 4509, 4510, 4511, 4512, 4513, 4512, 4438, 4240, 146, 148, 4246, 151, 152, 949, 161, 4258, 171, 4269, 4276, 3336, 1967, 4431, 5535, 4436, 4430,
-    #             93, 94, 95, 96, 97, 98, 99, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 4292, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 211, 213, 214, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 319, 320, 333, 334, 335, 338, 339, 340, 196, 336, 337]
+    """
     excluded_categories = []
     total_disposed = 0
     outfits_disposed = 0
@@ -107,7 +91,7 @@ def process_dataset(dataset_root, dataset_filename, with_features: bool = False,
 
                 image_path = Path(dataset_root, "images", str(set_id), str(item["index"]) + ".jpg")
                 if with_features:
-                    features = extract_features(model, image_path)
+                    features = utils.extract_features(model, image_path)
                     images.append(features)
                 else:
                     with open(image_path, "rb") as img_file:
@@ -122,14 +106,14 @@ def process_dataset(dataset_root, dataset_filename, with_features: bool = False,
 
             if with_features:
                 outfit_features = {
-                    "categories": tf.train.FeatureList(feature=[_int64_feature(f) for f in categories]),
+                    "categories": tf.train.FeatureList(feature=[utils.int64_feature(f) for f in categories]),
                     "features": tf.train.FeatureList(
                         feature=[tf.train.Feature(float_list=tf.train.FloatList(value=f)) for f in images])
                 }
             else:
                 outfit_features = {
-                    "categories": tf.train.FeatureList(feature=[_int64_feature(f) for f in categories]),
-                    "images": tf.train.FeatureList(feature=[_bytes_feature(f) for f in images])
+                    "categories": tf.train.FeatureList(feature=[utils.int64_feature(f) for f in categories]),
+                    "images": tf.train.FeatureList(feature=[utils.bytes_feature(f) for f in images])
                 }
 
             feature_lists = tf.train.FeatureLists(feature_list=outfit_features)
