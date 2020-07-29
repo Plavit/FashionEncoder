@@ -44,7 +44,7 @@ Before running the experiment you will need to download and build the datasets.
 ### 1. Download the Datasets
 
 #### Download Maryland Polyvore
-1. Download the images for the Maryland Polyvore Dataset from this link [https://www.kaggle.com/dnepozitek/polyvore-dataset](https://www.kaggle.com/dnepozitek/polyvore-dataset)
+1. Download the dataset files for the Maryland Polyvore Dataset from this link [https://www.kaggle.com/dnepozitek/polyvore-dataset](https://www.kaggle.com/dnepozitek/polyvore-dataset)
 2. Move the folder `maryland` into `data/raw`
 3. Download the images from Maryland Polyvore dataset from this link [https://www.kaggle.com/dnepozitek/maryland-polyvore-images](https://www.kaggle.com/dnepozitek/maryland-polyvore-images)
 4. Move the folder `images` into `data/raw/maryland`
