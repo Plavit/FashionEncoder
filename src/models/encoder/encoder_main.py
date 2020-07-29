@@ -450,7 +450,7 @@ def main():
     parser.add_argument("--batch-size", type=int, help="Batch size")
     parser.add_argument("--filter-size", type=int, help="Filter size")
     parser.add_argument("--epoch-count", type=int, help="Number of epochs")
-    parser.add_argument("--mode", type=str, help="Type of action", choices=["train", "debug"], required=True)
+    parser.add_argument("--mode", type=str, help="Type of action", choices=["train", "debug"])
     parser.add_argument("--hidden-size", type=int, help="Hidden size")
     parser.add_argument("--num-heads", type=int, help="Number of heads")
     parser.add_argument("--num-hidden-layers", type=int, help="Number of hidden layers")
@@ -491,6 +491,8 @@ def main():
     parser.add_argument("--loss", type=str, help="Loss function", choices=["cross", "distance"])
     parser.add_argument("--margin", type=float, help="Margin of distance loss function")
     parser.add_argument("--param-set", type=str, help="Name of the hyperparameter set to use as base", default="BASE")
+    parser.add_argument("--category-attention", help="Compute keys and queries from categories",
+                        type=utils.str_to_bool, nargs='?', const=True)
 
     args = parser.parse_args()
 
@@ -518,9 +520,9 @@ def main():
 
     task = EncoderTask(params)
 
-    if args.mode == "train":
+    if params["mode"] == "train":
         task.train()
-    elif args.mode == "debug":
+    elif params["mode"] == "debug":
         task.debug()
     else:
         print("Invalid mode")

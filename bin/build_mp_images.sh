@@ -12,8 +12,7 @@ python -m "src.data.build_dataset" \
   --dataset-root "${DATASET_ROOT}" \
   --dataset-file "${DATASET_FILE}" \
   --tfrecord-template "${TFRECORD_TEMPLATE}" \
-  --shard-count 10 \
-  --with-features
+  --shard-count 10
 
 
 # Build the validaiton FITB
@@ -24,8 +23,7 @@ python -m "src.data.build_fitb" \
   --dataset-root "${DATASET_ROOT}" \
   --dataset-file "${DATASET_FILE}" \
   --output-path "${OUTPUT_FILE}" \
-  --fitb-file "fill_in_blank_valid.json" \
-  --with-features
+  --fitb-file "fill_in_blank_valid.json"
 
 
 # Build the test FITB
@@ -36,5 +34,4 @@ python -m "src.data.build_fitb" \
   --dataset-root "${DATASET_ROOT}" \
   --dataset-file "${DATASET_FILE}" \
   --output-path "${OUTPUT_FILE}" \
-  --fitb-file "fill_in_blank_test.json" \
-  --with-features
+  --fitb-file "fill_in_blank_test.json"

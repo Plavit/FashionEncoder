@@ -199,8 +199,11 @@ Number of categories
 __`--with-mask-category-embedding {True,False}`__
 Apply category embedding to the mask token
 
+__`--category-attention {True,False}`__
+Compute keys and queries from categories
+
 __`--target-gradient-from TARGET_GRADIENT_FROM`__
-Value of valid accuracy, when gradient is let through target tensors, -1 for stopped gradient
+Value of valid accuracy, when gradient is let through target tensors, -1 for stopped targets gradient
 
 __`--info INFO`__
 Arbitrary additional information about the configuration that is logged

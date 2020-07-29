@@ -256,13 +256,13 @@ class FashionEncoder(tf.keras.Model):
                 logger.debug("One hot categories")
                 logger.debug(one_hot_categories)
 
-            output = self.encode(inputs, one_hot_categories, attention_bias, training)
+            output = self.encode(inputs, attention_bias, training, categories=one_hot_categories)
 
             self.add_loss(self.activity_regularizer(output))
 
             return output
 
-    def encode(self, inputs, categories, attention_bias, training):
+    def encode(self, inputs, attention_bias, training, categories=None):
         """Generate continuous representation for inputs.
 
         Args:
@@ -286,7 +286,7 @@ class FashionEncoder(tf.keras.Model):
                     encoder_inputs, rate=self.params["layer_postprocess_dropout"])
 
             return self.encoder_stack(
-                encoder_inputs, categories, attention_bias, training=training)
+                encoder_inputs, attention_bias, categories=categories, training=training)
 
 
 class PrePostProcessingWrapper(tf.keras.layers.Layer):
@@ -330,6 +330,7 @@ class InputDenseLayerWrapper(tf.keras.layers.Layer):
 
     def __init__(self, params):
         super(InputDenseLayerWrapper, self).__init__()
+        self.params = params
 
         if "category_embedding" in params and \
                 params["category_embedding"] and \
@@ -344,7 +345,7 @@ class InputDenseLayerWrapper(tf.keras.layers.Layer):
                                            name="dense_input",
                                            activity_regularizer=
                                            tf.keras.regularizers.l2(self.params["dense_regularization"]))
-        self.params = params
+
         self.postprocess_dropout = params["i_dense_dropout"]
 
     def build(self, input_shape):
@@ -406,9 +407,6 @@ class EncoderStack(tf.keras.layers.Layer):
                 PrePostProcessingWrapper(feed_forward_network, params)
             ])
 
-        # Create final layer normalization layer.
-        self.output_normalization = tf.keras.layers.LayerNormalization(
-            epsilon=1e-6, dtype="float32")
         super(EncoderStack, self).build(input_shape)
 
     def get_config(self):
@@ -416,7 +414,7 @@ class EncoderStack(tf.keras.layers.Layer):
             "params": self.params,
         }
 
-    def call(self, encoder_inputs, categories, attention_bias, training):
+    def call(self, encoder_inputs, attention_bias, training, categories=None):
         """Return the output of the encoder layer stacks.
 
         Args:
@@ -440,10 +438,9 @@ class EncoderStack(tf.keras.layers.Layer):
 
             with tf.name_scope("layer_%d" % n):
                 with tf.name_scope("self_attention"):
-                    encoder_inputs = self_attention_layer(
-                        encoder_inputs, categories, attention_bias, training=training)
+                    encoder_inputs = self_attention_layer(encoder_inputs, attention_bias,
+                                                          categories=categories, training=training)
                 with tf.name_scope("ffn"):
-                    encoder_inputs = feed_forward_network(
-                        encoder_inputs, training=training)
+                    encoder_inputs = feed_forward_network(encoder_inputs, training=training)
 
-        return self.output_normalization(encoder_inputs)
+        return encoder_inputs

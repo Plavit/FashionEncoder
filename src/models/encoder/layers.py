@@ -329,7 +329,7 @@ class Attention(tf.keras.layers.Layer):
             "attention_dropout": self.attention_dropout,
         }
 
-    def call(self, query_input, categories, source_input, bias, training, cache=None, decode_loop_step=None):
+    def call(self, query_input, source_input, bias, training, categories=None, cache=None, decode_loop_step=None):
         """Apply attention mechanism to query_input and source_input.
 
         Args:
@@ -415,10 +415,10 @@ class SelfAttention(Attention):
     Implementation based on Tensorflow Official Models
     """
 
-    def call(self, query_input, categories, bias, training, cache=None,
+    def call(self, query_input, bias, training, categories=None, cache=None,
              decode_loop_step=None):
         return super(SelfAttention, self).call(
-            query_input, categories, query_input, bias, training, cache, decode_loop_step)
+            query_input, query_input, bias, training, categories, cache, decode_loop_step)
 
 
 class Dense3D(tf.keras.layers.Layer):

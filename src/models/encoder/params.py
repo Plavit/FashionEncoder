@@ -32,7 +32,8 @@ BASE = {
     "enc_regularization": 0,
     "emb_dropout": 0,
     "i_dense_dropout": 0.1,
-    "category_attention": False
+    "category_attention": False,
+    "mode": "train"
 }
 
 
