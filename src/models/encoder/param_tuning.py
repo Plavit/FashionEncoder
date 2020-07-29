@@ -1,9 +1,8 @@
 import datetime
-
 import kerastuner as kt
+import tensorflow as tf
 import src.models.encoder.fashion_encoder as fashion_enc
 import src.models.encoder.params as model_params
-import tensorflow as tf
 from src.models.encoder.encoder_main import EncoderTask
 
 

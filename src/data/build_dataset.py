@@ -52,6 +52,7 @@ def main():
                 writer.close()
     print("Saved the dataset successfully", flush=True)
 
+
 def process_dataset(dataset_root: str, dataset_filename: str, with_features: bool = False, model_path: str = None):
     """
     Create list of Sequence Examples from the dataset

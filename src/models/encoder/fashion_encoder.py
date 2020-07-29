@@ -9,9 +9,6 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
-
-from official.transformer.model import model_utils
-from official.transformer.v2 import ffn_layer
 import src.models.encoder.layers as layers
 import src.models.encoder.utils as utils
 
@@ -87,7 +84,7 @@ class FashionPreprocessorV2(tf.keras.Model):
              - When using already extracted features with shape [batch_size, seq_length, feature_dim]
              - When using images with shape [batch_size, input_length, image_width, image_height, 3]
             Second item, categories: int tensor with shape [batch_size, seq_length].
-            Third item, mask positions: int tensor with shape [batch_size, seq_length, 1]
+            Third item, mask positions: int tensor with shape [batch_size, 1, 1]
           kwargs["training"]: boolean, whether in training mode or not.
 
         Returns:
@@ -167,7 +164,7 @@ class CNNExtractor(tf.keras.Model):
             inputs: input tensor list of size 3
             First item, inputs: float tensor with shape [batch_size, input_length, image_width, image_height, 3]
             Second item, categories: int tensor with shape [batch_size, seq_length].
-            Third item, mask positions: int tensor with shape [batch_size, seq_length, 1]
+            Third item, mask positions: int tensor with shape [batch_size, 1, 1]
         """
         logger = tf.get_logger()
 
@@ -246,7 +243,7 @@ class FashionEncoder(tf.keras.Model):
                 logger.debug("Transformer inputs")
                 logger.debug(inputs)
 
-            attention_bias = model_utils.get_padding_bias(categories, 0)
+            attention_bias = utils.get_padding_bias(categories, 0)
 
             if "category_attention" in self.params and self.params["category_attention"]:
                 one_hot_categories = tf.one_hot(categories, self.params["categories_count"])
@@ -401,7 +398,7 @@ class EncoderStack(tf.keras.layers.Layer):
             self_attention_layer = layers.SelfAttention(
                 params["hidden_size"], params["num_heads"],
                 params["attention_dropout"])
-            feed_forward_network = ffn_layer.FeedForwardNetwork(
+            feed_forward_network = layers.FeedForwardNetwork(
                 params["hidden_size"], params["filter_size"], params["relu_dropout"])
 
             self.layers.append([

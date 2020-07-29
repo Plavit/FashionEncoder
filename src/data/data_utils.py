@@ -38,5 +38,14 @@ def extract_features(model: tf.keras.Model, path: str) -> np.ndarray:
 
 
 def key_from_fitb_string(string):
+    """
+    Get ids from string used in FITB
+
+    Args:
+        string: FITB string
+
+    Returns: (outfit_id, index)
+
+    """
     values = string.split("_")
     return int(values[0]), int(values[1])

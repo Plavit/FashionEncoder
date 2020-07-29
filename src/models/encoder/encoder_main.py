@@ -3,29 +3,29 @@ import datetime
 import logging
 import time
 from pathlib import Path
-
 import tensorflow as tf
-import src.models.encoder.metrics as metrics
-import src.models.encoder.fashion_encoder as fashion_enc
 import src.data.input_pipeline as input_pipeline
+import src.models.encoder.fashion_encoder as fashion_enc
+import src.models.encoder.metrics as metrics
 import src.models.encoder.utils as utils
 from src.models.encoder import params as params_sets
-
 
 PARAMS_MAP = {
     "MP": params_sets.MP,
     "MP_ADD": params_sets.MP_ADD,
     "MP_MUL": params_sets.MP_MUL,
     "MP_CONCAT": params_sets.MP_CONCAT,
-    "MP_NEG": params_sets.MP_NEG,
+    "MP_BEST": params_sets.MP_BEST,
     "PO": params_sets.PO,
     "PO_ADD": params_sets.PO_ADD,
     "PO_MUL": params_sets.PO_MUL,
     "PO_CONCAT": params_sets.PO_CONCAT,
+    "PO_BEST": params_sets.PO_BEST,
     "POD": params_sets.POD,
     "POD_ADD": params_sets.POD_ADD,
     "POD_MUL": params_sets.POD_MUL,
     "POD_CONCAT": params_sets.POD_CONCAT,
+    "POD_BEST": params_sets.POD_BEST,
 }
 
 
@@ -86,9 +86,10 @@ class EncoderTask:
             logger.debug("Targets")
             logger.debug(targets)
 
+        # Get preprocessed targets
         _, targets = preprocessor([targets, target_categories, mask_pos], training=False)  # The first item is masked
         res = model([inputs, input_categories, mask_pos], training=False)
-        outputs = res[0]  # Encoded inputs
+        outputs = res[0]  # Encoded inputs with predictions at mask_pos
 
         if self.params["mode"] == "debug":
             logger.debug("Processed targets")
@@ -98,19 +99,24 @@ class EncoderTask:
 
         debug = self.params["mode"] == "debug"
 
+        # Update the accuracy
         if self.params["loss"] == "cross":
-            metrics.fitb_acc(outputs, targets, mask_pos, target_position, input_categories, acc, debug)
+            metrics.fitb_dotproduct_acc(outputs, targets, mask_pos, target_position, input_categories, acc, debug)
         elif self.params["loss"] == "distance":
-            metrics.outfit_distance_fitb(outputs, targets, mask_pos, target_position, input_categories, acc, debug)
+            metrics.fitb_distance_acc(outputs, targets, mask_pos, target_position, acc, debug)
         else:
             raise RuntimeError("Unexpected loss function")
 
     def debug(self):
+        """
+        Executes the debug task that takes one sample from the training and FITB datasets and prints the traces
+        """
         # Create the model
         tf.config.experimental_run_functions_eagerly(True)
         model = fashion_enc.create_model(self.params, is_train=False)
         model.summary()
 
+        # Optionally restore model
         if "checkpoint_dir" in self.params:
             ckpt = tf.train.Checkpoint(step=tf.Variable(1), model=model)
             manager = tf.train.CheckpointManager(ckpt, self.params["checkpoint_dir"], max_to_keep=3)
@@ -127,12 +133,13 @@ class EncoderTask:
         train_log_dir = 'logs/' + current_time + '/debug'
         debug_summary_writer = tf.summary.create_file_writer(train_log_dir)
 
+        # Prepare datasets
         train_dataset, valid_dataset, fitb_dataset = self.get_datasets()
         train_dataset = train_dataset.take(1)
         fitb_dataset = fitb_dataset.take(1)
 
         logger.debug("-------------- FITB TRACE --------------")
-        mask = tf.constant([[[0]]])
+        mask = tf.constant([[[0]]])  # Mask is at position 0
         preprocessor = model.get_layer("preprocessor")
         task = tf.data.experimental.get_single_element(fitb_dataset)
 
@@ -151,7 +158,7 @@ class EncoderTask:
                 step=0)
 
         logger.debug("-------------- TRAIN TRACE --------------")
-        inputs, targets = tf.data.experimental.get_single_element(train_dataset)
+        inputs = tf.data.experimental.get_single_element(train_dataset)
         tf.summary.trace_on(graph=True)
         ret = EncoderTask.train_step(model, inputs[0], inputs[1], inputs[2])
         with debug_summary_writer.as_default():
@@ -166,12 +173,12 @@ class EncoderTask:
 
         if self.params["loss"] == "cross":
             acc = tf.metrics.CategoricalAccuracy()
-            metrics.xentropy_loss(outputs, tf.stop_gradient(targets), inputs[1], inputs[2],
-                                  categorywise_only=self.params["categorywise_train"], debug=True,acc=acc)
+            metrics.xentropy_loss(outputs, targets, inputs[1], inputs[2],
+                                  categorywise_only=self.params["categorywise_train"], debug=True, acc=acc)
         elif self.params["loss"] == "distance":
             acc = tf.metrics.Accuracy()
-            metrics.outfit_distance_loss(
-                outputs, tf.stop_gradient(targets), inputs[1], inputs[2], self.params["margin"], debug=True, acc=acc)
+            metrics.distance_loss(
+                outputs, targets, inputs[1], inputs[2], self.params["margin"], debug=True, acc=acc)
         else:
             raise RuntimeError("Unexpected loss function")
 
@@ -182,29 +189,65 @@ class EncoderTask:
 
     @staticmethod
     def train_step(model, inputs, input_categories, mask_positions):
+        """
+        Perform one training step
+
+        Args:
+            model: model to train
+            inputs: float tensor
+             - When using already extracted features with shape [batch_size, seq_length, feature_dim]
+             - When using images with shape [batch_size, input_length, image_width, image_height, 3]
+            input_categories: int tensor with shape [batch_size, seq_length].
+            mask_positions: int tensor with shape [batch_size, 1, 1]
+
+        Returns: (Outputs, Training Targets) both float tensors of shape [batch_size, seq_length, hidden_size]
+
+        """
         ret = model([inputs, input_categories, mask_positions], training=True)
         return ret[0], ret[1]
 
-    def _grad(self, model: tf.keras.Model, inputs, targets, acc=None, num_replicas=1, stop_targets_gradient=True):
+    def _grad(self, model: tf.keras.Model, inputs, acc=None, stop_targets_gradient=True):
+        """
+        Computes gradient of one training step
+
+        Args:
+            model: model to train
+            inputs: input tensor list of size 3
+                First item, inputs: float tensor
+                 - When using already extracted features with shape [batch_size, seq_length, feature_dim]
+                 - When using images with shape [batch_size, input_length, image_width, image_height, 3]
+                Second item, categories: int tensor with shape [batch_size, seq_length].
+                Third item, mask positions: int tensor with shape [batch_size, 1, 1]
+            acc: instance of CategoricalAccuracy (for cross-entropy) or Accuracy (for distance)
+            stop_targets_gradient: whether stop target gradient
+
+        Returns: (loss_value, grad)
+
+        """
         with tf.GradientTape() as tape:
             ret = EncoderTask.train_step(model, inputs[0], inputs[1], inputs[2])
             outputs = ret[0]
-            targets = tf.stop_gradient(targets) if stop_targets_gradient else ret[1]
+            targets = tf.stop_gradient(ret[1]) if stop_targets_gradient else ret[1]
             if self.params["loss"] == "cross":
                 loss_value = metrics.xentropy_loss(
                     outputs, targets,
-                    inputs[1], inputs[2], acc, categorywise_only=self.params["categorywise_train"]) / num_replicas
+                    inputs[1], inputs[2], acc, categorywise_only=self.params["categorywise_train"])
             elif self.params["loss"] == "distance":
-                loss_value = metrics.outfit_distance_loss(
-                    outputs, targets, inputs[1], inputs[2], self.params["margin"], acc) \
-                             / num_replicas
+                loss_value = metrics.distance_loss(
+                    outputs, targets, inputs[1], inputs[2], self.params["margin"], acc)
             else:
                 raise RuntimeError("Unexpected loss function")
-            loss_value += tf.add_n(model.losses)
+            loss_value += tf.add_n(model.losses)  # Add additional losses (e.g. from regularizations)
         grad = tape.gradient(loss_value, model.trainable_variables)
         return loss_value, grad
 
     def get_datasets(self):
+        """
+        Get training, validation and test input pipelines
+
+        Returns: (train_dataset, valid_dataset, test_dataset) instances of tf.data.Dataset
+
+        """
         # Optionally build a lookup table for category groups
         lookup = None
         if self.params["with_category_grouping"]:
@@ -213,10 +256,12 @@ class EncoderTask:
             else:
                 lookup = utils.build_mp_category_lookup_table()
 
+        # Build training dataset
         train_dataset = input_pipeline.get_training_dataset(self.params["train_files"],
                                                             self.params["batch_size"],
                                                             not self.params["with_cnn"], lookup)
 
+        # Build validation dataset based on the validation mode
         if self.params["valid_mode"] == "masking":
             valid_dataset = input_pipeline.get_training_dataset(self.params["valid_files"],
                                                                 2, not self.params["with_cnn"], lookup).cache()
@@ -224,22 +269,40 @@ class EncoderTask:
             valid_dataset = input_pipeline.get_fitb_dataset([self.params["valid_files"]], not self.params["with_cnn"],
                                                             lookup, self.params["use_mask_category"]).batch(1)
 
+        # Build test dataset
         test_dataset = input_pipeline.get_fitb_dataset([self.params["test_files"]], not self.params["with_cnn"],
                                                        lookup, self.params["use_mask_category"]).batch(1)
 
         return train_dataset, valid_dataset, test_dataset
 
-    def _validate(self, model, valid_dataset):
+    @staticmethod
+    def _validate_masking(model, valid_dataset):
+        """
+        Validate the model using masking validation task (same as training)
+
+        Args:
+            model: model to validate
+            valid_dataset: validation dataset, instance of tf.data.Dataset
+
+        Returns: Validation accuracy
+
+        """
         # Validation loop
         valid_acc = tf.metrics.CategoricalAccuracy()
-        for x, _ in valid_dataset:
-            ret = model([x[0], x[1], x[2]], training=False)
+        for sample in valid_dataset:
+            ret = model([sample[0], sample[1], sample[2]], training=False)
             outputs = ret[0]
             targets = ret[1]
-            metrics.xentropy_loss(outputs, targets, x[1], x[2], valid_acc)
+            metrics.xentropy_loss(outputs, targets, sample[1], sample[2], valid_acc)
         return valid_acc.result()
 
     def train(self, on_epoch_end=None):
+        """
+        Trains the model according to params of the task
+
+        Args:
+            on_epoch_end: callbacks with the following parameters (model, valid_accuracy, current_epoch_num)
+        """
         if on_epoch_end is None:
             on_epoch_end = []
 
@@ -281,10 +344,14 @@ class EncoderTask:
                                                     , by_name=True)
             print("Restored weights from {}".format(self.params["with_weights"]), flush=True)
 
-        if "early_stop" in self.params and self.params["early_stop"]:
+        early_stop = "early_stop" in self.params and self.params["early_stop"]
+
+        if early_stop:
             early_stopping_monitor = utils.EarlyStoppingMonitor(self.params["early_stop_patience"],
                                                                 self.params["early_stop_delta"],
                                                                 self.params["early_stop_warmup"])
+        else:
+            early_stopping_monitor = None
 
         for epoch in range(1, num_epochs + 1):
             epoch_loss_avg = tf.keras.metrics.Mean('epoch_loss')
@@ -297,16 +364,16 @@ class EncoderTask:
                 raise RuntimeError("Unexpected loss function")
 
             # Training loop
-            for x, y in train_dataset:
+            for sample in train_dataset:
                 batch_number += 1
 
                 # Optimize the model
                 if self.params["target_gradient_from"] == -1:
-                    loss_value, grads = self._grad(model, x, y, acc, stop_targets_gradient=False)
+                    loss_value, grads = self._grad(model, sample, acc, stop_targets_gradient=False)
                 elif max_valid < self.params["target_gradient_from"]:
-                    loss_value, grads = self._grad(model, x, y, acc)
+                    loss_value, grads = self._grad(model, sample, acc)
                 else:
-                    loss_value, grads = self._grad(model, x, y, acc, stop_targets_gradient=False)
+                    loss_value, grads = self._grad(model, sample, acc, stop_targets_gradient=False)
 
                 optimizer.apply_gradients(zip(grads, model.trainable_variables))
 
@@ -333,7 +400,7 @@ class EncoderTask:
                 test_model.set_weights(weights)
 
                 if self.params["valid_mode"] == "masking":
-                    valid_acc = self._validate(test_model, valid_dataset)
+                    valid_acc = self._validate_masking(test_model, valid_dataset)
                 else:
                     valid_acc = self.fitb(test_model, valid_dataset)
 
@@ -349,7 +416,7 @@ class EncoderTask:
                 if valid_acc > max_valid:
                     max_valid = valid_acc
                     model.save_weights(str(Path(self.params["checkpoint_dir"], "best_weights.h5")))
-                    model.get_layer("preprocessor").\
+                    model.get_layer("preprocessor"). \
                         save_weights(str(Path(self.params["checkpoint_dir"], "preprocessor.h5")))
                     model.get_layer("encoder"). \
                         save_weights(str(Path(self.params["checkpoint_dir"], "encoder.h5")))
@@ -359,7 +426,7 @@ class EncoderTask:
                     for callback in on_epoch_end:
                         callback(model, valid_acc, epoch)
 
-                if "early_stop" in self.params and self.params["early_stop"]:
+                if early_stop:
                     if early_stopping_monitor.should_stop(valid_acc, 2):
                         print("Stopped the training early. Validation accuracy hasn't improved for {} epochs".format(
                             self.params["early_stop_patience"]))
@@ -381,7 +448,7 @@ def main():
     parser.add_argument("--valid-files", type=str, help="Paths to validation dataset files")
     parser.add_argument("--test-files", type=str, help="Paths to test dataset files")
     parser.add_argument("--batch-size", type=int, help="Batch size")
-    parser.add_argument("--filter-size", type=int, help="Transformer filter size")
+    parser.add_argument("--filter-size", type=int, help="Filter size")
     parser.add_argument("--epoch-count", type=int, help="Number of epochs")
     parser.add_argument("--mode", type=str, help="Type of action", choices=["train", "debug"], required=True)
     parser.add_argument("--hidden-size", type=int, help="Hidden size")
@@ -398,16 +465,16 @@ def main():
                         help="Batch size of validation dataset (by default the same as batch size)")
     parser.add_argument("--with-cnn", help="Use CNN to extract features from images", type=utils.str_to_bool, nargs='?',
                         const=True)
-    parser.add_argument("--category-embedding", help="Add learned category embedding to image feature vectors",
+    parser.add_argument("--category-embedding", help="Apply learned category embedding to image feature vectors",
                         type=utils.str_to_bool, nargs='?', const=True)
-    parser.add_argument("--categories-count", type=int, help="Add learned category embedding to image feature vectors")
-    parser.add_argument("--with-mask-category-embedding", help="Add category embedding to mask token",
+    parser.add_argument("--categories-count", type=int, help="Number of categories")
+    parser.add_argument("--with-mask-category-embedding", help="Apply category embedding to mask token",
                         type=utils.str_to_bool, nargs='?', const=True)
     parser.add_argument("--target-gradient-from", type=int,
                         help="Value of valid accuracy, when gradient is let through target tensors, -1 for stopped "
-                             "gradient")
+                             "target gradient")
     parser.add_argument("--info", type=str, help="Additional information about the configuration")
-    parser.add_argument("--with-category-grouping", help="Categories are mapped into groups",
+    parser.add_argument("--with-category-grouping", help="Categories are mapped into high-level groups",
                         type=utils.str_to_bool, nargs='?', const=True)
     parser.add_argument("--category-dim", type=int, help="Dimension of category embedding")
     parser.add_argument("--category-merge", type=str, help="Mode of category embedding merge with visual features",

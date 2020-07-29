@@ -11,6 +11,7 @@ Outfit recommendation model base on the Transformer's encoder.
 
 ### Requirements
 For seamless experience we recommend to use `enviroment.yml` to create a conda environment. Or make sure that you have the following dependencies installed:
+- Python 3.7
 - Tensorflow >= 2.1
 - pillow
 - scipy
@@ -21,6 +22,8 @@ For seamless experience we recommend to use `enviroment.yml` to create a conda e
 
 
     ├── README.md          <- The top-level README for developers using this project.
+    |
+    ├── bin                <- Executable scripts
     |
     ├── data
     │   ├── processed      <- The final, canonical data sets for modeling

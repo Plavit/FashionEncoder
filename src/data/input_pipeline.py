@@ -36,10 +36,6 @@ def get_dataset(filenames, with_features):
         return raw_dataset.map(parse_example_with_images)
 
 
-def append_targets(features, categories, token_pos):
-    return (features, categories, token_pos), features
-
-
 def add_random_mask_positions(features, categories):
     seq_length = tf.shape(categories)[0]
     random_position = tf.random.uniform((1,), minval=0, maxval=seq_length, dtype="int32", seed=1)
@@ -48,6 +44,18 @@ def add_random_mask_positions(features, categories):
 
 
 def get_training_dataset(filenames, batch_size, with_features, category_lookup=None):
+    """
+    Build training-type dataset
+
+    Args:
+        filenames: Filenames of the tfrecord data
+        batch_size: batch size
+        with_features: the files contain extracted features
+        category_lookup: optional tf.lookup.StaticHashTable for mapping the categories into high-level groups
+
+    Returns: Training-type dataset, each sample contains (inputs, categories, mask_positions)
+
+    """
     outfits = get_dataset(filenames, with_features)
 
     if category_lookup is not None:
@@ -66,7 +74,6 @@ def get_training_dataset(filenames, batch_size, with_features, category_lookup=N
         outfits = outfits.padded_batch(batch_size, ([None, 299, 299, 3], [None], [None, 1]), drop_remainder=True)
 
     return outfits\
-        .map(append_targets, tf.data.experimental.AUTOTUNE)\
         .prefetch(tf.data.experimental.AUTOTUNE)
 
 
@@ -110,7 +117,7 @@ def parse_fitb_with_images(raw):
 def add_mask_mock(inputs, input_categories, targets, target_categories, target_position, true_mask_category=False):
     """
     Adds mock tensor to inputs at the 0th index
-    Adds category -1 to input_categories tensor at the 0th index
+    Adds category 0 to input_categories tensor at the 0th index
     Returns:
         Example ready for FITB task
     """
@@ -122,7 +129,7 @@ def add_mask_mock(inputs, input_categories, targets, target_categories, target_p
         masked_category = target_categories[0]
         masked_category = tf.expand_dims(masked_category, axis=0)
     else:
-        masked_category = tf.constant([0], dtype=tf.int32)
+        masked_category = tf.constant([1], dtype=tf.int32)
     input_categories = tf.concat([masked_category, input_categories], axis=0)
 
     return inputs, input_categories, targets, target_categories, target_position
@@ -142,6 +149,19 @@ def map_training_categories(inputs, input_categories, category_lookup):
 
 
 def get_fitb_dataset(filenames, with_features, category_lookup=None, use_mask_category=False):
+    """
+    Build FITB dataset
+
+    Args:
+        filenames: filenames of the tfrecord dataset
+        with_features: the files contain extracted features
+        category_lookup: optional tf.lookup.StaticHashTable for mapping the categories into high-level groups
+        use_mask_category: use true mask category (else category id 1 is used)
+
+    Returns: FITB dataset, each sample contains (inputs, input_categories, targets, target_categories, target_position)
+        the mask token is located at position 0
+
+    """
     raw_dataset = tf.data.TFRecordDataset(filenames)
     if with_features:
         dataset = raw_dataset.map(parse_fitb_with_features)
