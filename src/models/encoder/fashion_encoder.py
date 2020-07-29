@@ -9,6 +9,8 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
+from official.transformer.model import model_utils
+from official.transformer.v2 import ffn_layer
 import src.models.encoder.layers as layers
 import src.models.encoder.utils as utils
 
@@ -243,7 +245,7 @@ class FashionEncoder(tf.keras.Model):
                 logger.debug("Transformer inputs")
                 logger.debug(inputs)
 
-            attention_bias = utils.get_padding_bias(categories, 0)
+            attention_bias = model_utils.get_padding_bias(categories, 0)
 
             if "category_attention" in self.params and self.params["category_attention"]:
                 one_hot_categories = tf.one_hot(categories, self.params["categories_count"])
@@ -399,7 +401,7 @@ class EncoderStack(tf.keras.layers.Layer):
             self_attention_layer = layers.SelfAttention(
                 params["hidden_size"], params["num_heads"],
                 params["attention_dropout"])
-            feed_forward_network = layers.FeedForwardNetwork(
+            feed_forward_network = ffn_layer.FeedForwardNetwork(
                 params["hidden_size"], params["filter_size"], params["relu_dropout"])
 
             self.layers.append([
@@ -407,6 +409,9 @@ class EncoderStack(tf.keras.layers.Layer):
                 PrePostProcessingWrapper(feed_forward_network, params)
             ])
 
+        # Create final layer normalization layer.
+        self.output_normalization = tf.keras.layers.LayerNormalization(
+            epsilon=1e-6, dtype="float32")
         super(EncoderStack, self).build(input_shape)
 
     def get_config(self):
@@ -443,4 +448,4 @@ class EncoderStack(tf.keras.layers.Layer):
                 with tf.name_scope("ffn"):
                     encoder_inputs = feed_forward_network(encoder_inputs, training=training)
 
-        return encoder_inputs
+        return self.output_normalization(encoder_inputs)
