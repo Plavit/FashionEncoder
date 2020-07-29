@@ -1,16 +1,29 @@
-"""Defines the Fashion Encoder model in TF 2.0.
+# Copyright 2018 The TensorFlow Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
 
-The Transformer paper: https://arxiv.org/pdf/1706.03762.pdf
-Transformer model code source: https://github.com/tensorflow/models/tree/master/official/nlp/transformer
+"""Defines the Fashion Outfit Encoder model in TF 2.0.
+
+Model paper: https://arxiv.org/pdf/1706.03762.pdf
+Transformer model code source: https://github.com/tensorflow/tensor2tensor
 """
-
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
-from official.transformer.model import model_utils
-from official.transformer.v2 import ffn_layer
+
 import src.models.encoder.layers as layers
 import src.models.encoder.utils as utils
 
@@ -197,9 +210,6 @@ class CNNExtractor(tf.keras.Model):
 class FashionEncoder(tf.keras.Model):
     """Transformer's Encoder Stack
 
-    Based on the Tensorflow Official Transformer implementation:
-    https://github.com/tensorflow/models/tree/master/official
-
     Implemented as described in: https://arxiv.org/pdf/1706.03762.pdf
     """
 
@@ -237,15 +247,13 @@ class FashionEncoder(tf.keras.Model):
 
         inputs, categories = inputs[0], inputs[1]
 
-        # Variance scaling is used here because it seems to work in many problems.
-        # Other reasonable initializers may also work just as well.
         with tf.name_scope("Transformer"):
             logger = tf.get_logger()
             if self.params["mode"] == "debug":
                 logger.debug("Transformer inputs")
                 logger.debug(inputs)
 
-            attention_bias = model_utils.get_padding_bias(categories, 0)
+            attention_bias = utils.get_padding_bias(categories, 0)
 
             if "category_attention" in self.params and self.params["category_attention"]:
                 one_hot_categories = tf.one_hot(categories, self.params["categories_count"])
@@ -255,16 +263,16 @@ class FashionEncoder(tf.keras.Model):
             if self.params["mode"] == "debug":
                 logger.debug("Categories")
                 logger.debug(categories)
-                logger.debug("One hot categories")
+                logger.debug("One hot")
                 logger.debug(one_hot_categories)
 
-            output = self.encode(inputs, attention_bias, training, categories=one_hot_categories)
+            output = self.encode(inputs, one_hot_categories, attention_bias, training)
 
             self.add_loss(self.activity_regularizer(output))
 
             return output
 
-    def encode(self, inputs, attention_bias, training, categories=None):
+    def encode(self, inputs, categories, attention_bias, training):
         """Generate continuous representation for inputs.
 
         Args:
@@ -288,7 +296,7 @@ class FashionEncoder(tf.keras.Model):
                     encoder_inputs, rate=self.params["layer_postprocess_dropout"])
 
             return self.encoder_stack(
-                encoder_inputs, attention_bias, categories=categories, training=training)
+                encoder_inputs, categories, attention_bias, training=training)
 
 
 class PrePostProcessingWrapper(tf.keras.layers.Layer):
@@ -333,7 +341,6 @@ class InputDenseLayerWrapper(tf.keras.layers.Layer):
     def __init__(self, params):
         super(InputDenseLayerWrapper, self).__init__()
         self.params = params
-
         if "category_embedding" in params and \
                 params["category_embedding"] and \
                 params["category_merge"] == "concat":
@@ -401,7 +408,7 @@ class EncoderStack(tf.keras.layers.Layer):
             self_attention_layer = layers.SelfAttention(
                 params["hidden_size"], params["num_heads"],
                 params["attention_dropout"])
-            feed_forward_network = ffn_layer.FeedForwardNetwork(
+            feed_forward_network = layers.FeedForwardNetwork(
                 params["hidden_size"], params["filter_size"], params["relu_dropout"])
 
             self.layers.append([
@@ -419,7 +426,7 @@ class EncoderStack(tf.keras.layers.Layer):
             "params": self.params,
         }
 
-    def call(self, encoder_inputs, attention_bias, training, categories=None):
+    def call(self, encoder_inputs, categories, attention_bias, training):
         """Return the output of the encoder layer stacks.
 
         Args:
@@ -443,9 +450,10 @@ class EncoderStack(tf.keras.layers.Layer):
 
             with tf.name_scope("layer_%d" % n):
                 with tf.name_scope("self_attention"):
-                    encoder_inputs = self_attention_layer(encoder_inputs, attention_bias,
-                                                          categories=categories, training=training)
+                    encoder_inputs = self_attention_layer(
+                        encoder_inputs, categories, attention_bias, training=training)
                 with tf.name_scope("ffn"):
-                    encoder_inputs = feed_forward_network(encoder_inputs, training=training)
+                    encoder_inputs = feed_forward_network(
+                        encoder_inputs, training=training)
 
         return self.output_normalization(encoder_inputs)

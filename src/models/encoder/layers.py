@@ -5,7 +5,6 @@ from __future__ import print_function
 import tensorflow as tf
 
 import src.models.encoder.utils as utils
-from official.nlp import bert_modeling as common_layer
 
 
 class SingleMasking(tf.keras.layers.Layer):
@@ -283,9 +282,7 @@ class CategoryConcater(tf.keras.layers.Layer):
 
 
 class Attention(tf.keras.layers.Layer):
-    """Multi-headed attention layer.
-    Implementation from Tensorflow Official Models (slightly modified)
-    """
+    """Multi-headed attention layer."""
 
     def __init__(self, hidden_size, num_heads, attention_dropout):
         """Initialize Attention.
@@ -309,16 +306,16 @@ class Attention(tf.keras.layers.Layer):
         """Builds the layer."""
         # Layers for linearly projecting the queries, keys, and values.
         size_per_head = self.hidden_size // self.num_heads
-        self.query_dense_layer = common_layer.Dense3D(
+        self.query_dense_layer = Dense3D(
             self.num_heads, size_per_head, kernel_initializer="glorot_uniform",
             use_bias=False, name="query")
-        self.key_dense_layer = common_layer.Dense3D(
+        self.key_dense_layer = Dense3D(
             self.num_heads, size_per_head, kernel_initializer="glorot_uniform",
             use_bias=False, name="key")
-        self.value_dense_layer = common_layer.Dense3D(
+        self.value_dense_layer = Dense3D(
             self.num_heads, size_per_head, kernel_initializer="glorot_uniform",
             use_bias=False, name="value")
-        self.output_dense_layer = common_layer.Dense3D(
+        self.output_dense_layer = Dense3D(
             self.num_heads, size_per_head, kernel_initializer="glorot_uniform",
             use_bias=False, output_projection=True, name="output_transform")
         super(Attention, self).build(input_shape)
@@ -330,12 +327,12 @@ class Attention(tf.keras.layers.Layer):
             "attention_dropout": self.attention_dropout,
         }
 
-    def call(self, query_input, source_input, bias, training, categories=None, cache=None, decode_loop_step=None):
+    def call(self, query_input, categories, source_input, bias, training, cache=None, decode_loop_step=None):
         """Apply attention mechanism to query_input and source_input.
 
         Args:
           query_input: A tensor with shape [batch_size, length_query, hidden_size].
-          categories: A tensor with shape [batch_size, seq_length]
+          categories: One-hote encoded categories or None
           source_input: A tensor with shape [batch_size, length_source,
             hidden_size].
           bias: A tensor with shape [batch_size, 1, length_query, length_source],
@@ -412,15 +409,12 @@ class Attention(tf.keras.layers.Layer):
 
 
 class SelfAttention(Attention):
-    """Multiheaded self-attention layer.
-    Implementation based on Tensorflow Official Models
-    """
+    """Multiheaded self-attention layer."""
 
-    def call(self, query_input, bias, training, categories=None, cache=None,
+    def call(self, query_input, categories, bias, training, cache=None,
              decode_loop_step=None):
         return super(SelfAttention, self).call(
-            query_input, query_input, bias, training, categories, cache, decode_loop_step)
-
+            query_input, categories, query_input, bias, training, cache, decode_loop_step)
 
 class Dense3D(tf.keras.layers.Layer):
     """A Dense Layer using 3D kernel with tf.einsum implementation.
