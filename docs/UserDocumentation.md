@@ -57,7 +57,7 @@ Before running the experiment you will need to download and build the datasets.
 
 ### 2. Build the TFRecord Datasets
 
-We have prepaited scripts to build the datasets in the `bin` folder. You can execute the following commands to build the corresponding datasets:
+We have prepared scripts to build the datasets in the `bin` folder. You can execute the following commands to build the corresponding datasets:
 - `bin/build_mp.sh`
 - `bin/build_mp_images.sh`
 - `bin/build_po.sh`
@@ -101,7 +101,7 @@ Imagine that you want to change some hyperparameters of a model with multiplicat
         --filter-size 64 \
         --batch-size 16
     ```
-    > Make sure that you change the `category_dim` to math the `hidden_size` when using multiplication or addition for category embedding
+    > Make sure that you change the `category_dim` to match the `hidden_size` when using multiplication or addition for category embedding
 
 3. __Debug the model__
 To show a trace of a model, you can use an arbitrary set of parameters and set the `mode` to debug:
@@ -132,6 +132,7 @@ To train the model together with the CNN, you have to use the `with-cnn` switch 
         --batch-size 6
     ```
 
+> Be aware that training with the CNN requires a lot of memory (both of graphics and standard). Also, the framework was optimised for use with extracted features, so training with CNN is rather experimental.
 
 
 #### Parameters of `src.models.encoder.encoder_main`
@@ -215,7 +216,7 @@ __`--category-dim CATEGORY_DIM`__
 Dimension of category embedding (must match the `hidden_size` when using multiplication or addition for embedding)
 
 __`--category-merge {add,multiply,concat}`__
-Mode of category embedding merge
+Mode of category embedding merge. Applies only when `--category-embedding ` is set to `True`
 
 __`--category-file CATEGORY_FILE`__
 Path to Polyvore Outfits categories file

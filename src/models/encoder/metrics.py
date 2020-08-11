@@ -108,7 +108,7 @@ def fitb_dotproduct_acc(y_pred, y_true, pred_positions, target_position, pred_ca
         y_pred: Outputs of the encoder, float tensor of shape [1, seq_length, hidden_size]
         y_true: Candidates embedded with the preprocessor, float tensor of shape [1, candidates_count, hidden_size]
         pred_positions: positions of the predictions, int tensor of shape [1, 1, 1]
-        target_position: position of the target, int tensor of shape [1, 1, 1]
+        target_position: position of the target, int tensor of shape [1]
         pred_categories: categories of the predictions, int tensor of shape [1, seq_length]
         acc: instance of CategoricalAccuracy
         debug: Enable debug mode
@@ -305,7 +305,7 @@ def distance_loss(y_pred, y_true, categories, mask_positions, margin,
     return tf.reduce_mean(loss)
 
 
-def fitb_distance_acc(y_pred, y_true, pred_positions, target_positions, acc: tf.metrics.Accuracy, debug=False):
+def fitb_distance_acc(y_pred, y_true, pred_positions, target_position, acc: tf.metrics.Accuracy, debug=False):
     """
     Updates the FITB accuracy using Euclidean distance to compute similarity
 
@@ -313,9 +313,11 @@ def fitb_distance_acc(y_pred, y_true, pred_positions, target_positions, acc: tf.
         y_pred: float tensor of shape [1, pred_seq_length, hidden_size]
         y_true: float tensor of shape [1, true_seq_length, hidden_size]
         pred_positions: positions of the predictions, int tensor of shape [1, 1, 1]
-        target_positions: positions of the correct items, int tensor of shape [1, 1, 1]
+        target_position: positions of the correct items, int tensor of shape [1]
         acc: instance of tf.metrics.Accuracy
         debug: enable debug mode
     """
-    dist_to_pos, dist_to_neg = get_distances_to_targets(y_pred, y_true, pred_positions, target_positions, debug)
+    target_position = tf.cast(target_position, dtype="int32")
+    target_position = tf.reshape(target_position, shape=[1, 1, 1])
+    dist_to_pos, dist_to_neg = get_distances_to_targets(y_pred, y_true, pred_positions, target_position, debug)
     _update_distance_accuracy(acc, dist_to_pos, dist_to_neg)

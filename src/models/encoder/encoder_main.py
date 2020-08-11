@@ -32,14 +32,16 @@ PARAMS_MAP = {
 class EncoderTask:
     """A class that manages training and evaluation of the Fashion Encoder model"""
 
-    def __init__(self, params):
+    def __init__(self, params, model=None):
         """
         Set the hyperparameters
 
         Args:
             params: hyperparameter object defining layer sizes, dropout values, etc.
+            model: model to use for training
         """
         self.params = params
+        self.model = model
 
     def fitb(self, model, dataset):
         """
@@ -296,6 +298,24 @@ class EncoderTask:
             metrics.xentropy_loss(outputs, targets, sample[1], sample[2], valid_acc)
         return valid_acc.result()
 
+    def get_model(self, training):
+        """
+        Get model from constructor or create a new one using given hyperparameters
+
+        Args:
+            training: training mode
+
+        Returns: tf.keras.Model
+
+        """
+        if self.model is not None:
+            model = self.model
+        else:
+            model = fashion_enc.create_model(self.params, training)
+
+        model.summary()
+        return model
+
     def train(self, on_epoch_end=None):
         """
         Trains the model according to params of the task
@@ -319,10 +339,8 @@ class EncoderTask:
         if "checkpoint_dir" not in self.params:
             self.params["checkpoint_dir"] = "./logs/" + current_time + "/tf_ckpts"
 
-        # Create the model
-        model = fashion_enc.create_model(self.params, True)
-        model.summary()
-        test_model = fashion_enc.create_model(self.params, False)
+        model = self.get_model(True)
+        test_model = fashion_enc.create_model(model.get_layer("encoder").params, False)
 
         # Threshold of valid acc when target gradient is not stopped
         max_valid = 0

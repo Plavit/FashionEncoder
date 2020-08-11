@@ -1,13 +1,16 @@
-# FashionEncoder
-
-Outfit recommendation model base on the Transformer's encoder.
+# Fashion Encoder
+Framework for training and evaluating the Fashion Encoder model
 
 ## Docs
 - [User Documentation](docs/UserDocumentation.md)
 
 ## Data Sources
+We use the following datasets in this project:
 - [Maryland Polyvore](https://github.com/xthan/polyvore-dataset) 
 - [Polyvore Outfits](https://github.com/mvasil/fashion-compatibility)
+
+> We provide our own downloads in the [User Documentation](docs/UserDocumentation.md)
+
 
 ### Requirements
 For seamless experience we recommend to use `enviroment.yml` to create a conda environment. Or make sure that you have the following dependencies installed:
@@ -29,10 +32,9 @@ For seamless experience we recommend to use `enviroment.yml` to create a conda e
     │   ├── processed      <- The final, canonical data sets for modeling
     │   └── raw            <- The original, immutable data dump
     │
-    ├── docs               <- Project documentation and reports
-    │   └── report.md      <- Project report
-    │
-    ├── models             <- Trained and serialized models
+    ├── docs               <- Project documentation
+    │   ├── UserDocumentation.pdf   <- User Documentation in PDF format
+    │   └── UserDocumentation.md    <- User Documentation
     |
     └── src          <- Source code for use in this project
         ├── data     <- Scripts to process data
@@ -53,8 +55,3 @@ For seamless experience we recommend to use `enviroment.yml` to create a conda e
         │       └── utils.py            <- Helper methods
         │
         └── notebooks  <- Jupyter Notebooks with experiments and data exploration
-            ├── df_attr_comparison.py <- Visualization of nearest negihbors with their attributes
-            ├── df_exploration.py     <- Deep Fashion dataset statistical exploration
-            ├── df_neighbors.py       <- Model validation
-            ├── n_neighbors.py        <- sk-learn n-neighbors wrapper
-            └── polyvore_neighbors.py <- Nearest neighbors visualization of Polyvore dataset embedding

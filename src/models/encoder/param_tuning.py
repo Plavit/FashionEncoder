@@ -8,19 +8,33 @@ from src.models.encoder.encoder_main import EncoderTask
 
 class FashionModelTuner(kt.Tuner):
     def run_trial(self, trial, **kwargs):
+        """
+        Run one trial
+
+        Args:
+            trial: object with information about the trial
+            **kwargs:
+        """
         model = self.hypermodel.build(trial.hyperparameters)  # type: tf.keras.Model
-        params = model.get_layer("encoder").params
+        params = model.get_layer("encoder").params.copy()
 
-        if "checkpoint_dir" in params:
-            del params["checkpoint_dir"]  # Do not use checkpoints
-
-        task = EncoderTask(params)
+        task = EncoderTask(params, model)
         print(params, flush=True)
         callbacks = [lambda curr_model, acc, epoch: self.on_epoch_end(trial, curr_model, epoch, logs={'acc': acc})]
         task.train(callbacks)
 
 
 def build(hp: kt.HyperParameters):
+    """
+    Build the Fashion Encoder Model
+
+    Adjust this method to modify the search space
+    Args:
+        hp: instance of kt.HyperParameters for interactions with Keras Tuner
+
+    Returns: Fashion Encoder model
+
+    """
     params = model_params.PO_ADD
 
     params["learning_rate"] = hp.Choice("learning_rate", [0.005, 0.001, 0.0005, 0.0001], default=0.0005)

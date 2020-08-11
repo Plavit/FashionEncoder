@@ -85,6 +85,7 @@ MP_CONCAT = MP_CATEGORY.copy()
 MP_CONCAT.update(
     {
         "category_merge": "concat",
+        "category_dim": 64
     }
 )
 
@@ -124,7 +125,7 @@ PO.update({
 
 POD = PO_BASE.copy()
 POD.update({
-    "train_files": ["data/processed/tfrecords/pod-features-train-000-1.tfrecord"],
+    "train_files": ["data/processed/tfrecords/pod-features-train-000-0.tfrecord"],
     "test_files": ["data/processed/tfrecords/pod-fitb-features-test.tfrecord"],
     "valid_files": ["data/processed/tfrecords/pod-fitb-features-valid.tfrecord"],
 })

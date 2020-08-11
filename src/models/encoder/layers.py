@@ -254,7 +254,7 @@ class CategoryConcater(tf.keras.layers.Layer):
             inputs: input tensor list of size 3
                 First item, inputs: float tensor with shape [batch_size, seq_length, feature_dim]
                 Second item, categories: int tensor with shape [batch_size, seq_length].
-                Third item, mask positions: int tensor with shape [batch_size, 1, 1]
+                Third item, mask positions: int tensor with shape [batch_size, seq_length, 1]
 
         Returns: Inputs with concatenated category embedding
             float tensor with shape [batch_size, seq_length, feature_dim]
@@ -265,7 +265,19 @@ class CategoryConcater(tf.keras.layers.Layer):
 
             logger = tf.get_logger()
 
-            embedded_categories = utils.get_category_embedding(categories, self.category_embedding, "zeros")
+            flat_categories = tf.reshape(categories, shape=(-1, 1))
+
+            mask_matrix = utils.compute_padding_mask_from_categories(categories)
+
+            batch_size = tf.shape(inputs)[0]
+            seq_length = tf.shape(inputs)[1]
+
+            embedded_categories = self.category_embedding(flat_categories)
+            embedded_categories = tf.squeeze(embedded_categories, axis=1)
+            # Apply mask so the category embedding is zero at padded positions
+            embedded_categories = tf.einsum("ij,jk->ik", mask_matrix, embedded_categories)
+            embedded_categories = tf.reshape(embedded_categories,
+                                             shape=(batch_size, seq_length, self.params["category_dim"]))
 
             # Optionally replace mask category embedding with zero tensor
             if not self.params["with_mask_category_embedding"] and mask_positions is not None:

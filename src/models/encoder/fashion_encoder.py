@@ -341,6 +341,7 @@ class InputDenseLayerWrapper(tf.keras.layers.Layer):
     def __init__(self, params):
         super(InputDenseLayerWrapper, self).__init__()
         self.params = params
+
         if "category_embedding" in params and \
                 params["category_embedding"] and \
                 params["category_merge"] == "concat":
