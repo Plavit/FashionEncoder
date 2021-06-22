@@ -1,5 +1,5 @@
 # Fashion Encoder
-Framework for training and evaluating the Fashion Encoder model
+Framework for training and evaluating the Fashion Encoder model. You can learn more about the model in my [bacherol thesis](https://dspace.cuni.cz/bitstream/handle/20.500.11956/120977/130292255.pdf)
 
 ## Docs
 - [User Documentation](docs/UserDocumentation.md)
